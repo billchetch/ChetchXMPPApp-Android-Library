@@ -42,7 +42,7 @@ public class XMPPApplication extends ChetchApplication {
             //String apiBaseURL = "http://192.168.1.106:8001/api";
             //String apiBaseURL = "http://192.168.1.100:8001/api";
             //String apiBaseURL = "http://192.168.4.102:8001/api";
-            String apiBaseURL = "http://192.168.1.103:8001/api";
+            String apiBaseURL = "http://192.168.2.88:8001/api";
             NetworkRepository.getInstance().setAPIBaseURL(apiBaseURL);
 
             MainActivity.suppressConnectionErrors = sharedPref.getBoolean("suppress_connection_errors", true);

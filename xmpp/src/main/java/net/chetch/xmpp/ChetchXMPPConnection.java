@@ -89,6 +89,7 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
         connection = null;
         authenticating = false;
         chatManager = null;
+        chats.clear();
     }
 
     public void disconnect() throws Exception{
@@ -110,8 +111,8 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
             throw new ChetchXMPPException("ChetchXMPPConnection::connect: Connection object already exists");
         }
 
+        //configure the connection
         XMPPTCPConnectionConfiguration conf = null;
-
         try {
             conf = XMPPTCPConnectionConfiguration.builder()
                     .setSecurityMode(ConnectionConfiguration.SecurityMode.disabled)
@@ -127,11 +128,12 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
         XMPPTCPConnection.setUseStreamManagementDefault(true);
         connection = new XMPPTCPConnection(conf);
         connection.setReplyTimeout(5000);
+        connection.addConnectionListener(this);
         if(connectionListener != null){
             connection.addConnectionListener(connectionListener);
         }
-        connection.addConnectionListener(this);
 
+        //now execute connection
         ExecutorService executor = Executors.newSingleThreadExecutor();
         executor.execute(() -> {
             try{
@@ -198,7 +200,7 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
      */
     @Override
     public void connected(final XMPPConnection connection) {
-
+        connecting = false;
         Log.d("xmpp", "Connected!");
 
     }
@@ -251,8 +253,27 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
     /*
     Messaging
     */
-    public void createChat(String entityID, IncomingChatMessageListener incomingListener, OutgoingChatMessageListener outgongListener) throws Exception{
-        EntityBareJid jid = JidCreate.entityBareFrom(entityID);
+    public boolean isReadyForChat(){
+        return connection != null && connection.isConnected() && connection.isAuthenticated();
+    }
+
+    private String sanitizeEntityID(String entityID){
+        DomainBareJid domain = connection.getXMPPServiceDomain();
+        if(!entityID.contains("@" + domain)){
+            entityID += "@" + domain;
+        }
+        return entityID;
+    }
+
+    public Chat createChat(String entityID, IncomingChatMessageListener incomingListener, OutgoingChatMessageListener outgongListener) throws Exception{
+        if(connection == null){
+            throw new ChetchXMPPException("ChetchXMPPConnection::createChat no connection object");
+        }
+
+        //santisie the entityID
+        EntityBareJid jid = JidCreate.entityBareFrom(sanitizeEntityID(entityID));
+
+        //Do some checking
         if(chats.containsKey(jid)){
             throw new ChetchXMPPException("ChetchXMPPConnection::createChat A chat already exists for " + entityID);
         }
@@ -260,6 +281,7 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
             throw new ChetchXMPPException("ChetchXMPPConnection::createChat no chat manager exists");
         }
 
+        //create the chat and add listeners
         Chat chat = chatManager.chatWith(jid);
         ChatData chatData = new ChatData(chat);
 
@@ -274,14 +296,16 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
         if(outgongListener != null){
             chatManager.addOutgoingListener(outgongListener);
         }
+
+        return chat;
     }
 
-    public void createChat(String entityID, IncomingChatMessageListener incomingListener) throws Exception{
-        createChat(entityID, incomingListener, null);
+    public Chat createChat(String entityID, IncomingChatMessageListener incomingListener) throws Exception{
+        return createChat(entityID, incomingListener, null);
     }
 
-    public void createChat(String entityID) throws Exception{
-        createChat(entityID, null, null);
+    public Chat createChat(String entityID) throws Exception{
+        return createChat(entityID, null, null);
     }
 
     @Override
@@ -296,8 +320,34 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
         chatData.messagesSent++;
     }
 
+    public Message sendMessage(Chat chat, Message message) throws Exception{
+        chat.send(message);
+        return message;
+    }
 
-    protected void sendMessage(Message message){
+    public Message sendMessage(Chat chat, String messageBody) throws Exception{
+        Message message = MessageBuilder.buildMessage()
+                .ofType(Message.Type.chat)
+                .setBody(messageBody)
+                .build();
 
+        chat.send(message);
+
+        return message;
+    }
+
+    public Message sendMessage(EntityBareJid to, String messageBody) throws Exception{
+        if(!chats.containsKey(to)){
+            throw new ChetchXMPPException("ChetchXMPPConnection::sendMessage no chat found for " + to.toString());
+        }
+
+        Chat chat = chats.get(to).chat;
+        return sendMessage(chat, messageBody);
+    }
+
+    public Message sendMessage(String to, String messageBody) throws Exception{
+        String entityID = sanitizeEntityID(to);
+        EntityBareJid jid = JidCreate.entityBareFrom(entityID);
+        return sendMessage(jid, messageBody);
     }
 }
