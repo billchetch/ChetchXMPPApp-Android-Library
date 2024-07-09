@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <EditTextPreference
+        android:key="api_base_url"
+        android:selectAllOnFocus="true"
+        android:singleLine="false"
+        android:title="Network API Base URL"
+        android:summary="Set the Network API base URL here"
+        android:defaultValue="http://192.168.2.188:8001/api/"/>
+    <CheckBoxPreference
+        android:defaultValue="true"
+        android:key="suppress_connection_errors"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:summary="Check this box to suppress all connection errors after successfully connecting."
+        android:title="Suppress Connection Errors" />
+
+</PreferenceScreen>
