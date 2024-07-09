@@ -276,11 +276,11 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
         }
     }
 
-    public void creatteChat(String entityID, IncomingChatMessageListener incomingListener) throws Exception{
+    public void createChat(String entityID, IncomingChatMessageListener incomingListener) throws Exception{
         createChat(entityID, incomingListener, null);
     }
 
-    public void creatteChat(String entityID) throws Exception{
+    public void createChat(String entityID) throws Exception{
         createChat(entityID, null, null);
     }
 
