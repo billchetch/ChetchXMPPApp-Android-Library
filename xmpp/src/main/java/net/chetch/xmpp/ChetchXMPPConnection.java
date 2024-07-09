@@ -13,6 +13,10 @@ import org.jivesoftware.smack.ConnectionConfiguration;
 import org.jivesoftware.smack.ReconnectionListener;
 import org.jivesoftware.smack.chat2.Chat;
 import org.jivesoftware.smack.chat2.ChatManager;
+import org.jivesoftware.smack.chat2.IncomingChatMessageListener;
+import org.jivesoftware.smack.chat2.OutgoingChatMessageListener;
+import org.jivesoftware.smack.packet.Message;
+import org.jivesoftware.smack.packet.MessageBuilder;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jivesoftware.smack.android.AndroidSmackInitializer;
@@ -36,10 +40,13 @@ import org.jxmpp.jid.parts.Localpart;
 import org.jxmpp.jid.parts.Resourcepart;
 
 import java.io.IOException;
+import java.util.Dictionary;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class ChetchXMPPConnection implements ConnectionListener, ReconnectionListener {
+public class ChetchXMPPConnection implements ConnectionListener, ReconnectionListener, IncomingChatMessageListener, OutgoingChatMessageListener {
 
     static private ChetchXMPPConnection instance;
     static public ChetchXMPPConnection getInstance(Context context){
@@ -49,10 +56,22 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
         return instance;
     }
 
+    private class ChatData{
+        Chat chat = null;
+        int messagesSent = 0;
+        int messagesReceived = 0;
+
+        ChatData(Chat chat){
+            this.chat = chat;
+        }
+    }
+
     private boolean connecting = false;
     private boolean connected = false;
     private boolean authenticating = false;
     private XMPPTCPConnection connection = null;
+    private ChatManager chatManager = null;
+    private Map<EntityBareJid, ChatData> chats = new HashMap<>();
 
     private ChetchXMPPConnection(Context context){
         AndroidSmackInitializer.initialize(context);
@@ -69,6 +88,7 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
         connecting = false;
         connection = null;
         authenticating = false;
+        chatManager = null;
     }
 
     public void disconnect() throws Exception{
@@ -134,6 +154,9 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
             } finally {
                 connecting = false;
             }
+
+            //store a chatmanager for this connection
+            chatManager = ChatManager.getInstanceFor(connection);
         }); //end executor.execute
     }
 
@@ -223,5 +246,58 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
     public void reconnectionFailed(Exception arg0) {
 
         Log.e("xmpp", "ReconnectionFailed!");
+    }
+
+    /*
+    Messaging
+    */
+    public void createChat(String entityID, IncomingChatMessageListener incomingListener, OutgoingChatMessageListener outgongListener) throws Exception{
+        EntityBareJid jid = JidCreate.entityBareFrom(entityID);
+        if(chats.containsKey(jid)){
+            throw new ChetchXMPPException("ChetchXMPPConnection::createChat A chat already exists for " + entityID);
+        }
+        if(chatManager == null){
+            throw new ChetchXMPPException("ChetchXMPPConnection::createChat no chat manager exists");
+        }
+
+        Chat chat = chatManager.chatWith(jid);
+        ChatData chatData = new ChatData(chat);
+
+        chats.put(jid, chatData);
+
+        chatManager.addIncomingListener(this);
+        chatManager.addOutgoingListener(this);
+
+        if(incomingListener != null){
+            chatManager.addIncomingListener(incomingListener);
+        }
+        if(outgongListener != null){
+            chatManager.addOutgoingListener(outgongListener);
+        }
+    }
+
+    public void creatteChat(String entityID, IncomingChatMessageListener incomingListener) throws Exception{
+        createChat(entityID, incomingListener, null);
+    }
+
+    public void creatteChat(String entityID) throws Exception{
+        createChat(entityID, null, null);
+    }
+
+    @Override
+    public void newIncomingMessage(EntityBareJid from, Message message, Chat chat) {
+        ChatData chatData = chats.get(from);
+        chatData.messagesReceived++;
+    }
+
+    @Override
+    public void newOutgoingMessage(EntityBareJid to, MessageBuilder messageBuilder, Chat chat) {
+        ChatData chatData = chats.get(to);
+        chatData.messagesSent++;
+    }
+
+
+    protected void sendMessage(Message message){
+
     }
 }
