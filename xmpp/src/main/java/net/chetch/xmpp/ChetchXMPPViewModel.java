@@ -15,7 +15,7 @@ import net.chetch.webservices.network.Services;
 import org.jivesoftware.smack.ConnectionListener;
 import org.jivesoftware.smack.XMPPConnection;
 
-public class ChetchXMPPViewModel extends WebserviceViewModel{
+public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchConnectionListener{
 
     public static final String CHETCH_XMPP_SERVICE = "Chetch XMPP";
     public static final String CHETCH_XMPP_DOMAIN = "openfire.bb.lan";
@@ -25,10 +25,16 @@ public class ChetchXMPPViewModel extends WebserviceViewModel{
     Service chetchXMPPService = null;
     ServiceToken serviceToken = null;
     ChetchXMPPConnection xmppConnection = null;
+    Observer xmppConnectionObserver = null;
 
     public void init(Context context){
-        xmppConnection = ChetchXMPPConnection.getInstance(context);
+        try {
+            xmppConnection = ChetchXMPPConnection.create(context);
+        } catch (Exception e){
+            e.printStackTrace();
+        }
     }
+
     public void setCredentials(String username, String password){
         this.username = username;
         this.password = password;
@@ -49,41 +55,8 @@ public class ChetchXMPPViewModel extends WebserviceViewModel{
         if(SLog.LOG)SLog.i("ChetchXMPPViewModel", "Loading data for xmpp user " + username);
         DataStore<?> dataStore = super.loadData(observer);
         dataStore.observe(services-> {
+            connectToXMPPServer(observer);
             if(SLog.LOG)SLog.i("ChetchXMPPViewModel", "Loaded services...");
-            try{
-                xmppConnection.connect(chetchXMPPService.getLanIP(), CHETCH_XMPP_DOMAIN, new ConnectionListener() {
-                    @Override
-                    public void connected(XMPPConnection connection) {
-                        ConnectionListener.super.connected(connection);
-                        notifyObserver(observer, xmppConnection);
-
-                        try {
-                            xmppConnection.login(username, password);
-                        } catch(Exception e){
-                            if(SLog.LOG)SLog.e("ChetchXMPPViewModel", e.getMessage());
-                            e.printStackTrace();
-                            setError(e);
-                        }
-                    }
-
-                    @Override
-                    public void connectionClosedOnError(Exception e){
-                        if(SLog.LOG)SLog.e("ChetchXMPPViewModel", e.getMessage());
-                        e.printStackTrace();
-                        setError(e);
-                    }
-
-                    @Override
-                    public void authenticated(XMPPConnection arg0, boolean arg1) {
-
-                        if(SLog.LOG)SLog.i("ChetchXMPPViewModel", "Authenticated!");
-                    }
-                });
-            } catch (Exception e){
-                if(SLog.LOG)SLog.e("ChetchXMPPViewModel", e.getMessage());
-                e.printStackTrace();
-                setError(e);
-            }
         });
         return dataStore;
     }
@@ -99,5 +72,61 @@ public class ChetchXMPPViewModel extends WebserviceViewModel{
 
     public boolean isReady() {
         return super.isReady() && xmppConnection.isReadyForChat();
+    }
+
+    /*
+    XMPP connection
+     */
+    private void connectToXMPPServer(Observer connectionObserver){
+        xmppConnectionObserver = connectionObserver;
+        try{
+            xmppConnection.connect(chetchXMPPService.getLanIP(), CHETCH_XMPP_DOMAIN, this);
+        } catch (Exception e){
+            if(SLog.LOG)SLog.e("ChetchXMPPViewModel", e.getMessage());
+            e.printStackTrace();
+            setError(e);
+        }
+    }
+
+    @Override
+    public void connectFailed(Exception e){
+        if(SLog.LOG)SLog.e("ChetchXMPPViewModel", e.getMessage());
+        e.printStackTrace();
+        setError(e);
+    }
+
+    @Override
+    public void connected(XMPPConnection connection) {
+
+        if(xmppConnectionObserver != null){
+            notifyObserver(xmppConnectionObserver, xmppConnection);
+        }
+        try {
+            xmppConnection.login(username, password);
+        } catch(Exception e){
+            if(SLog.LOG)SLog.e("ChetchXMPPViewModel", e.getMessage());
+            e.printStackTrace();
+            setError(e);
+        }
+    }
+
+    @Override
+    public void connectionClosedOnError(Exception e){
+        if(SLog.LOG)SLog.e("ChetchXMPPViewModel", e.getMessage());
+        e.printStackTrace();
+        setError(e);
+    }
+
+    @Override
+    public void authenticationFailed(Exception e){
+        if(SLog.LOG)SLog.e("ChetchXMPPViewModel::authenticationFailed", e.getMessage());
+        e.printStackTrace();
+        setError(e);
+    }
+
+    @Override
+    public void authenticated(XMPPConnection arg0, boolean arg1) {
+
+        if(SLog.LOG)SLog.i("ChetchXMPPViewModel", "Authenticated!");
     }
 }

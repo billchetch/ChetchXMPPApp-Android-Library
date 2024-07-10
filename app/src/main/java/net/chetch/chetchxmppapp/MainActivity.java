@@ -99,8 +99,6 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
         setContentView(R.layout.activity_main);
         includeActionBar(SettingsActivity.class);
 
-
-
         if(!connectManager.isConnected()) {
             //Get models
             Logger.info("Main activity setting up model callbacks ...");
@@ -137,7 +135,7 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
     }
 
     private void startChat(){
-        ChetchXMPPConnection cnn = ChetchXMPPConnection.getInstance(getApplicationContext());
+        /*ChetchXMPPConnection cnn = ChetchXMPPConnection.getInstance(getApplicationContext());
 
         try {
             TextView messages = findViewById(R.id.messages);
@@ -168,7 +166,7 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
 
         } catch(Exception e){
             e.printStackTrace();
-        }
+        }*/
     }
 
     @Override

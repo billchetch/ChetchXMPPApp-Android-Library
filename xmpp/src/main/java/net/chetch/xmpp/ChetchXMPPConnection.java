@@ -46,14 +46,24 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class ChetchXMPPConnection implements ConnectionListener, ReconnectionListener, IncomingChatMessageListener, OutgoingChatMessageListener {
+public class ChetchXMPPConnection implements IChetchConnectionListener, ReconnectionListener, IncomingChatMessageListener, OutgoingChatMessageListener {
+    static private boolean initialised = false;
+    static public void initialise(Context context){
+        AndroidSmackInitializer.initialize(context);
+        initialised = true;
+    }
 
-    static private ChetchXMPPConnection instance;
-    static public ChetchXMPPConnection getInstance(Context context){
-        if(instance == null){
-            instance = new ChetchXMPPConnection(context);
+    static public ChetchXMPPConnection create(Context context) throws Exception{
+        initialise(context);
+        return create();
+    }
+
+    static public ChetchXMPPConnection create() throws Exception{
+        if(!initialised){
+            throw new ChetchXMPPException("ChetchXMPPConnection::create cannot create connection as not yet initialised");
         }
-        return instance;
+
+        return new ChetchXMPPConnection();
     }
 
     private class ChatData{
@@ -70,14 +80,15 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
     private boolean connected = false;
     private boolean authenticating = false;
     private XMPPTCPConnection connection = null;
+    IChetchConnectionListener connectionListener = null;
     private ChatManager chatManager = null;
     private Map<EntityBareJid, ChatData> chats = new HashMap<>();
 
-    private ChetchXMPPConnection(Context context){
-        AndroidSmackInitializer.initialize(context);
+    private ChetchXMPPConnection(){
+
     }
 
-    public void reset() throws Exception{
+    private void reset() throws Exception{
         if (connecting) {
             throw new ChetchXMPPException("ChetchXMPPConnection::disconnect: Connection in progress");
         }
@@ -87,6 +98,7 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
         }
         connecting = false;
         connection = null;
+        connectionListener = null;
         authenticating = false;
         chatManager = null;
         chats.clear();
@@ -103,12 +115,12 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
         reset();
     }
 
-    public void connect(String hostAddress, String xmppDomain, ConnectionListener connectionListener, ReconnectionListener reconnectionListener) throws Exception{
+    public void connect(String hostAddress, String xmppDomain, IChetchConnectionListener connectionListener, ReconnectionListener reconnectionListener) throws Exception{
         if(connecting) {
             throw new ChetchXMPPException("ChetchXMPPConnection::connect: Connection in progress");
         }
-        if(connection != null){
-            throw new ChetchXMPPException("ChetchXMPPConnection::connect: Connection object already exists");
+        if(connection != null && connection.isConnected()){
+           return;
         }
 
         //configure the connection
@@ -129,6 +141,7 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
         connection = new XMPPTCPConnection(conf);
         connection.setReplyTimeout(5000);
         connection.addConnectionListener(this);
+        this.connectionListener = connectionListener;
         if(connectionListener != null){
             connection.addConnectionListener(connectionListener);
         }
@@ -150,15 +163,20 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
                 /*PingManager pingManager =
                 PingManager.getInstanceFor(connection);
                 pingManager.setPingInterval(300);*/
+
+                chatManager = ChatManager.getInstanceFor(connection);
             } catch(Exception e){
                 e.printStackTrace();
-                throw new RuntimeException(e);
+                connectFailed(e);
+                if(connectionListener != null){
+                    connectionListener.connectFailed(e);
+                }
             } finally {
                 connecting = false;
             }
 
             //store a chatmanager for this connection
-            chatManager = ChatManager.getInstanceFor(connection);
+
         }); //end executor.execute
     }
 
@@ -166,7 +184,7 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
         connect(hostAddress, xmppDomain, null, null);
     }
 
-    public void connect(String hostAddress, String xmppDomain, ConnectionListener connectionListener) throws Exception{
+    public void connect(String hostAddress, String xmppDomain, IChetchConnectionListener connectionListener) throws Exception{
         connect(hostAddress, xmppDomain, connectionListener, null);
     }
 
@@ -180,6 +198,9 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
         if(!connection.isConnected()){
             throw new ChetchXMPPException("ChetchXMPPConnection::login: not connected");
         }
+        if(connection.isAuthenticated()){
+            return;
+        }
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
         executor.execute(() -> {
@@ -188,7 +209,10 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
                 connection.login(username, password);
             } catch (Exception e) {
                 e.printStackTrace();
-                throw new RuntimeException(e);
+                authenticationFailed(e);
+                if(connectionListener != null){
+                    connectionListener.authenticationFailed(e);
+                }
             } finally {
                 authenticating = false;
             }
@@ -199,6 +223,17 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
     Connection listeer hooks
      */
     @Override
+    public void connectFailed(Exception arg0){
+        try {
+            connecting = false;
+            reset();
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+        Log.e("xmpp", "Connect failed: " + arg0.getMessage());
+    }
+
+    @Override
     public void connected(final XMPPConnection connection) {
         connecting = false;
         Log.d("xmpp", "Connected!");
@@ -207,7 +242,6 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
 
     @Override
     public void connectionClosed() {
-
         Log.d("xmpp", "ConnectionCLosed!");
         try {
             reset();
@@ -218,13 +252,18 @@ public class ChetchXMPPConnection implements ConnectionListener, ReconnectionLis
 
     @Override
     public void connectionClosedOnError(Exception arg0) {
-
         Log.e("xmpp", "ConnectionClosedOn Error!");
         try {
             reset();
         } catch (Exception e){
             e.printStackTrace();
         }
+    }
+
+    @Override
+    public void authenticationFailed(Exception arg0) {
+        authenticating = false;
+        Log.e("xmpp", "Authentication failuer!: " + arg0.getMessage());
     }
 
     @Override
