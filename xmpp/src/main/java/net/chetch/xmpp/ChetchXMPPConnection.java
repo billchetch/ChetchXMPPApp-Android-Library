@@ -1,7 +1,6 @@
 package net.chetch.xmpp;
 
 import net.chetch.xmpp.exceptions.ChetchXMPPException;
-import net.chetch.messaging.Message;
 
 import android.content.Context;
 import android.os.AsyncTask;
@@ -17,6 +16,7 @@ import org.jivesoftware.smack.chat2.Chat;
 import org.jivesoftware.smack.chat2.ChatManager;
 import org.jivesoftware.smack.chat2.IncomingChatMessageListener;
 import org.jivesoftware.smack.chat2.OutgoingChatMessageListener;
+import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.MessageBuilder;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
@@ -360,27 +360,26 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
         chatData.messagesSent++;
     }
 
-    public org.jivesoftware.smack.packet.Message sendMessage(Chat chat, org.jivesoftware.smack.packet.Message message) throws Exception{
+    public Message sendMessage(Chat chat, Message message) throws Exception{
         chat.send(message);
         return message;
     }
 
-    public org.jivesoftware.smack.packet.Message sendMessage(Chat chat, String messageBody, org.jivesoftware.smack.packet.Message.Type messageType) throws Exception{
+    public Message sendMessage(Chat chat, String messageBody, Message.Type messageType) throws Exception{
         org.jivesoftware.smack.packet.Message message = MessageBuilder.buildMessage()
                 .ofType(messageType)
                 .setBody(messageBody)
                 .build();
 
-        chat.send(message);
-
-        return message;
+        return sendMessage(chat, message);
     }
 
-    public org.jivesoftware.smack.packet.Message sendMessage(Chat chat, String messageBody) throws Exception{
+
+    public  Message sendMessage(Chat chat, String messageBody) throws Exception{
         return sendMessage(chat, messageBody, org.jivesoftware.smack.packet.Message.Type.chat);
     }
 
-    public org.jivesoftware.smack.packet.Message sendMessage(EntityBareJid to, String messageBody) throws Exception{
+    public Message sendMessage(EntityBareJid to, String messageBody) throws Exception{
         if(!chats.containsKey(to)){
             throw new ChetchXMPPException("ChetchXMPPConnection::sendMessage no chat found for " + to.toString());
         }
@@ -389,28 +388,9 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
         return sendMessage(chat, messageBody);
     }
 
-    public org.jivesoftware.smack.packet.Message sendMessage(String to, String messageBody) throws Exception{
+    public Message sendMessage(String to, String messageBody) throws Exception{
         String entityID = sanitizeEntityID(to);
         EntityBareJid jid = JidCreate.entityBareFrom(entityID);
         return sendMessage(jid, messageBody);
-    }
-
-    public org.jivesoftware.smack.packet.Message sendMessage(String to, Message message) throws Exception{
-        String messageBody = message.serialize();
-
-        org.jivesoftware.smack.packet.Message xmppMessage = MessageBuilder.buildMessage()
-                .ofType(org.jivesoftware.smack.packet.Message.Type.normal)
-                .setSubject("ChetchMessage")
-                .setBody(messageBody)
-                .build();
-
-        EntityBareJid jid = JidCreate.entityBareFrom(sanitizeEntityID(to));
-        if(!chats.containsKey(jid)){
-            throw new ChetchXMPPException("ChetchXMPPConnection::sendMessage no chat found for " + jid.toString());
-        }
-        Chat chat = chats.get(to).chat;
-        chat.send(xmppMessage);
-
-        return xmppMessage;
     }
 }

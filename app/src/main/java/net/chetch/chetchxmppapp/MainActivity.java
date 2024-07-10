@@ -7,6 +7,8 @@ import android.widget.Button;
 
 import net.chetch.appframework.GenericActivity;
 import net.chetch.appframework.NotificationBar;
+import net.chetch.messaging.Message;
+import net.chetch.messaging.MessageType;
 import net.chetch.utilities.Logger;
 import net.chetch.utilities.SLog;
 import net.chetch.webservices.ConnectManager;
@@ -14,20 +16,14 @@ import net.chetch.webservices.WebserviceViewModel;
 import net.chetch.xmpp.ChetchXMPPConnection;
 import net.chetch.xmpp.ChetchXMPPViewModel;
 
-import android.os.StrictMode;
 import android.widget.EditText;
 import android.widget.TextView;
 
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
 
-import org.jivesoftware.smack.ConnectionListener;
 import org.jivesoftware.smack.XMPPConnection;
 import org.jivesoftware.smack.chat2.Chat;
-import org.jivesoftware.smack.chat2.IncomingChatMessageListener;
-import org.jivesoftware.smack.packet.Message;
-import org.jivesoftware.smack.packet.MessageBuilder;
-import org.jxmpp.jid.EntityBareJid;
 
 //import org.jivesoftware.smack.ConnectionListener;
 
@@ -114,9 +110,7 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
 
             try {
                 Logger.info("Main activity sstting xmpp credentials, adding models and requesting connect ...");
-                model.init(getApplicationContext());
-                model.setCredentials("test", "test");
-
+                model.init(getApplicationContext(),"test", "test");
                 connectManager.addModel(model);
                 connectManager.setPermissableServerTimeDifference(5 * 60);
                 connectManager.requestConnect(connectProgress);
@@ -135,14 +129,14 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
     }
 
     private void startChat(){
-        /*ChetchXMPPConnection cnn = ChetchXMPPConnection.getInstance(getApplicationContext());
-
         try {
             TextView messages = findViewById(R.id.messages);
+            ChetchXMPPConnection cnn = model.getConnection();
             String chatPartner = "test2";
             Chat chat = cnn.createChat(chatPartner, (from, message, chat1) -> {
                 String messagesSoFar = messages.getText().toString();
-                messages.setText(messagesSoFar + "\n<-- " + message.getBody());
+                Message chetchMessage = model.processIncomingMessage(message);
+                messages.setText(messagesSoFar + "\n<-- " + chetchMessage.toString());
                 Log.d("chat", "Received a message dong: " + message.getBody());
             });
 
@@ -154,7 +148,12 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
                 try {
                     String messageBody = compose.getText().toString().trim();
                     if(!messageBody.isEmpty()) {
-                        cnn.sendMessage(chat, messageBody);
+                        Message message = new Message();
+                        message.Type = MessageType.INFO;
+                        message.Target = chat.getXmppAddressOfChatPartner().toString();
+                        message.addValue("Comment", messageBody);
+                        message.addValue("Number", 24);
+                        cnn.sendMessage(chat, model.processOutgoingMessage(message));
                         compose.setText("");
                         String messagesSoFar = messages.getText().toString();
                         messages.setText(messagesSoFar + "\n---> " + messageBody);
@@ -166,7 +165,7 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
 
         } catch(Exception e){
             e.printStackTrace();
-        }*/
+        }
     }
 
     @Override
