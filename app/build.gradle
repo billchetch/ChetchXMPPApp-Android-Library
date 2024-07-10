@@ -37,6 +37,7 @@ dependencies {
     implementation project(':appframework')
     implementation project(':appresources')
     implementation project(':webservices')
+    implementation project(':messaging')
     implementation project(':xmpp');
 
     implementation libs.appcompat
