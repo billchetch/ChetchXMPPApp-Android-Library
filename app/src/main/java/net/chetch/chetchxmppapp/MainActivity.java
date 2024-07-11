@@ -136,7 +136,8 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
             Chat chat = cnn.createChat(chatPartner, (from, message, chat1) -> {
                 String messagesSoFar = messages.getText().toString();
                 Message chetchMessage = model.processIncomingMessage(message);
-                messages.setText(messagesSoFar + "\n<-- " + chetchMessage.toString());
+                String s = chetchMessage != null ? chetchMessage.toString() : message.toString();
+                messages.setText(messagesSoFar + "\n<-- " + s);
                 Log.d("chat", "Received a message dong: " + message.getBody());
             });
 

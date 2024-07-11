@@ -148,8 +148,8 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
 
     //Chetch Messages
     public boolean isChetchMessage(org.jivesoftware.smack.packet.Message message){
-        //return message.getType() == org.jivesoftware.smack.packet.Message.Type.normal && CHETCH_MESSAGE_SUBJECT.equals(message.getSubject());
-        return true;
+        return message.getType() == org.jivesoftware.smack.packet.Message.Type.normal && CHETCH_MESSAGE_SUBJECT.equals(message.getSubject());
+        //return false;
     }
 
     public org.jivesoftware.smack.packet.Message processOutgoingMessage(Message message){
@@ -166,8 +166,7 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
 
     public Message processIncomingMessage(org.jivesoftware.smack.packet.Message incomingMessage){
         if(isChetchMessage(incomingMessage)){
-            Message message = Message.deserialize(incomingMessage.getBody());
-            return message;
+            return Message.deserialize(incomingMessage.getBody());
         } else {
             return null;
         }
