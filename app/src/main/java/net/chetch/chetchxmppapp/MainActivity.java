@@ -133,12 +133,22 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
             TextView messages = findViewById(R.id.messages);
             ChetchXMPPConnection cnn = model.getConnection();
             String chatPartner = "test2";
-            Chat chat = cnn.createChat(chatPartner, (from, message, chat1) -> {
-                String messagesSoFar = messages.getText().toString();
-                Message chetchMessage = model.processIncomingMessage(message);
-                String s = chetchMessage != null ? chetchMessage.toString() : message.toString();
-                messages.setText(messagesSoFar + "\n<-- " + s);
-                Log.d("chat", "Received a message dong: " + message.getBody());
+            Chat chat = cnn.createChat(chatPartner, (from, message, originalMessage, chat1) -> {
+
+                if(message.hasValue("Count")){
+                    Integer n = message.getInt("Count");
+                    n = n + 1; //increment
+                    message.Target = from.toString();
+                    message.setValue("Count", n);
+                    messages.setText("Received; " + originalMessage.getBody() + "\nSending: " + message.toString());
+                    try {
+                        //cnn.sendMessage(chat1, message);
+                    } catch(Exception e){
+                        e.printStackTrace();
+                    }
+                }
+
+                Log.d("chat", "Received a message dong: " + originalMessage.getBody());
             });
 
             View chatWindow = findViewById(R.id.chat);
@@ -153,8 +163,8 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
                         message.Type = MessageType.INFO;
                         message.Target = chat.getXmppAddressOfChatPartner().toString();
                         message.addValue("Comment", messageBody);
-                        message.addValue("Number", 24);
-                        cnn.sendMessage(chat, model.processOutgoingMessage(message));
+                        message.addValue("Count", 24);
+                        cnn.sendMessage(chat, message);
                         compose.setText("");
                         String messagesSoFar = messages.getText().toString();
                         messages.setText(messagesSoFar + "\n---> " + messageBody);

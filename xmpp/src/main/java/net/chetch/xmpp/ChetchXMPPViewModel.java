@@ -17,15 +17,16 @@ import net.chetch.xmpp.exceptions.ChetchXMPPException;
 import org.jivesoftware.smack.ConnectionListener;
 import org.jivesoftware.smack.XMPPConnection;
 import org.jivesoftware.smack.chat2.Chat;
+import org.jivesoftware.smack.chat2.IncomingChatMessageListener;
+import org.jivesoftware.smack.chat2.OutgoingChatMessageListener;
 import org.jivesoftware.smack.packet.MessageBuilder;
 import org.jxmpp.jid.EntityBareJid;
 import org.jxmpp.jid.impl.JidCreate;
 
-public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchConnectionListener{
+public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchConnectionListener {
 
     public static final String CHETCH_XMPP_SERVICE = "Chetch XMPP";
     public static final String CHETCH_XMPP_DOMAIN = "openfire.bb.lan";
-    public static final String CHETCH_MESSAGE_SUBJECT = "chetch.message";
 
     String username = null;
     String password = null;
@@ -146,29 +147,4 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         if(SLog.LOG)SLog.i("ChetchXMPPViewModel", "Authenticated!");
     }
 
-    //Chetch Messages
-    public boolean isChetchMessage(org.jivesoftware.smack.packet.Message message){
-        return message.getType() == org.jivesoftware.smack.packet.Message.Type.normal && CHETCH_MESSAGE_SUBJECT.equals(message.getSubject());
-        //return false;
-    }
-
-    public org.jivesoftware.smack.packet.Message processOutgoingMessage(Message message){
-        String messageBody = message.serialize();
-
-        org.jivesoftware.smack.packet.Message xmppMessage = MessageBuilder.buildMessage()
-                .ofType(org.jivesoftware.smack.packet.Message.Type.normal)
-                .setSubject(CHETCH_MESSAGE_SUBJECT)
-                .setBody(messageBody)
-                .build();
-
-        return xmppMessage;
-    }
-
-    public Message processIncomingMessage(org.jivesoftware.smack.packet.Message incomingMessage){
-        if(isChetchMessage(incomingMessage)){
-            return Message.deserialize(incomingMessage.getBody());
-        } else {
-            return null;
-        }
-    }
 }

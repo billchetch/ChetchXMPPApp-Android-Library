@@ -9,6 +9,7 @@ import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import org.jivesoftware.smack.ConnectionConfiguration;
 import org.jivesoftware.smack.ReconnectionListener;
@@ -41,13 +42,21 @@ import org.jxmpp.jid.parts.Localpart;
 import org.jxmpp.jid.parts.Resourcepart;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Dictionary;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class ChetchXMPPConnection implements IChetchConnectionListener, ReconnectionListener, IncomingChatMessageListener, OutgoingChatMessageListener {
+    public static final String CHETCH_MESSAGE_SUBJECT = "chetch.message";
+
     static private boolean initialised = false;
     static public void initialise(Context context){
         AndroidSmackInitializer.initialize(context);
@@ -83,7 +92,9 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
     private XMPPTCPConnection connection = null;
     IChetchConnectionListener connectionListener = null;
     private ChatManager chatManager = null;
-    private Map<EntityBareJid, ChatData> chats = new HashMap<>();
+    final private Map<EntityBareJid, ChatData> chats = new HashMap<>();
+    final private List<IChetchIncomingMessageListener> incomingMessageListeners = new ArrayList<>();
+    final private List<IChetchOutgoingMessageListener> outgoingMessageListeners = new ArrayList<>();
 
     private ChetchXMPPConnection(){
 
@@ -103,6 +114,8 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
         authenticating = false;
         chatManager = null;
         chats.clear();
+        incomingMessageListeners.clear();
+        outgoingMessageListeners.clear();
     }
 
     public void disconnect() throws Exception{
@@ -270,7 +283,6 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
     @Override
     public void authenticated(XMPPConnection arg0, boolean arg1) {
         Log.d("xmpp", "Authenticated!");
-
     }
 
     /*
@@ -281,12 +293,10 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
     public void reconnectingIn(int arg0) {
 
         Log.d("xmpp", "Reconnectingin " + arg0);
-
     }
 
     @Override
     public void reconnectionFailed(Exception arg0) {
-
         Log.e("xmpp", "ReconnectionFailed!");
     }
 
@@ -305,7 +315,7 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
         return entityID;
     }
 
-    public Chat createChat(String entityID, IncomingChatMessageListener incomingListener, OutgoingChatMessageListener outgongListener) throws Exception{
+    public Chat createChat(String entityID, IChetchIncomingMessageListener incomingListener, IChetchOutgoingMessageListener outgoingListener) throws Exception{
         if(connection == null){
             throw new ChetchXMPPException("ChetchXMPPConnection::createChat no connection object");
         }
@@ -324,23 +334,21 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
         //create the chat and add listeners
         Chat chat = chatManager.chatWith(jid);
         ChatData chatData = new ChatData(chat);
-
         chats.put(jid, chatData);
 
         chatManager.addIncomingListener(this);
         chatManager.addOutgoingListener(this);
 
-        if(incomingListener != null){
-            chatManager.addIncomingListener(incomingListener);
+        if(incomingListener != null && !incomingMessageListeners.contains(incomingListener)){
+            incomingMessageListeners.add(incomingListener);
         }
-        if(outgongListener != null){
-            chatManager.addOutgoingListener(outgongListener);
+        if(outgoingListener != null && !outgoingMessageListeners.contains(outgoingListener)){
+            outgoingMessageListeners.add(outgoingListener);
         }
-
         return chat;
     }
 
-    public Chat createChat(String entityID, IncomingChatMessageListener incomingListener) throws Exception{
+    public Chat createChat(String entityID, IChetchIncomingMessageListener incomingListener) throws Exception{
         return createChat(entityID, incomingListener, null);
     }
 
@@ -348,49 +356,54 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
         return createChat(entityID, null, null);
     }
 
+    public boolean isChetchMessage(org.jivesoftware.smack.packet.Message message){
+        return message.getType() == org.jivesoftware.smack.packet.Message.Type.normal && CHETCH_MESSAGE_SUBJECT.equals(message.getSubject());
+        //return false;
+    }
+
     @Override
     public void newIncomingMessage(EntityBareJid from, org.jivesoftware.smack.packet.Message message, Chat chat) {
         ChatData chatData = chats.get(from);
         chatData.messagesReceived++;
+
+        if(isChetchMessage(message)) {
+            try {
+                net.chetch.messaging.Message chetchMessage = net.chetch.messaging.Message.deserialize(message.getBody());
+                for (IChetchIncomingMessageListener listener : incomingMessageListeners) {
+                    listener.onIncomingMessage(from, chetchMessage, message, chat);
+                }
+            } catch (Exception e){
+                e.printStackTrace();
+            }
+
+        }
     }
 
     @Override
     public void newOutgoingMessage(EntityBareJid to, MessageBuilder messageBuilder, Chat chat) {
         ChatData chatData = chats.get(to);
         chatData.messagesSent++;
+
+        for(IChetchOutgoingMessageListener listener : outgoingMessageListeners){
+            listener.onOutgoingMessage(to, messageBuilder, chat);
+        }
     }
 
-    public Message sendMessage(Chat chat, Message message) throws Exception{
-        chat.send(message);
-        return message;
-    }
+    public Message sendMessage(Chat chat, net.chetch.messaging.Message chetchMessage) throws Exception{
+        //Add this c
+        if(chetchMessage.Sender == null || chetchMessage.Sender.trim().isEmpty()){
+            chetchMessage.Sender = connection.getUser().toString();
+        }
 
-    public Message sendMessage(Chat chat, String messageBody, Message.Type messageType) throws Exception{
-        org.jivesoftware.smack.packet.Message message = MessageBuilder.buildMessage()
-                .ofType(messageType)
+        String messageBody = chetchMessage.serialize();
+
+        Message xmppMessage = MessageBuilder.buildMessage()
+                .ofType(org.jivesoftware.smack.packet.Message.Type.normal)
+                .setSubject(CHETCH_MESSAGE_SUBJECT)
                 .setBody(messageBody)
                 .build();
 
-        return sendMessage(chat, message);
-    }
-
-
-    public  Message sendMessage(Chat chat, String messageBody) throws Exception{
-        return sendMessage(chat, messageBody, org.jivesoftware.smack.packet.Message.Type.chat);
-    }
-
-    public Message sendMessage(EntityBareJid to, String messageBody) throws Exception{
-        if(!chats.containsKey(to)){
-            throw new ChetchXMPPException("ChetchXMPPConnection::sendMessage no chat found for " + to.toString());
-        }
-
-        Chat chat = chats.get(to).chat;
-        return sendMessage(chat, messageBody);
-    }
-
-    public Message sendMessage(String to, String messageBody) throws Exception{
-        String entityID = sanitizeEntityID(to);
-        EntityBareJid jid = JidCreate.entityBareFrom(entityID);
-        return sendMessage(jid, messageBody);
+        chat.send(xmppMessage);
+        return xmppMessage;
     }
 }
