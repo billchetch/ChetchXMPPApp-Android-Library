@@ -6,6 +6,7 @@ import android.util.Log;
 import androidx.lifecycle.Observer;
 
 import net.chetch.messaging.Message;
+import net.chetch.messaging.MessageType;
 import net.chetch.utilities.SLog;
 import net.chetch.webservices.DataStore;
 import net.chetch.webservices.WebserviceViewModel;
@@ -23,17 +24,26 @@ import org.jivesoftware.smack.packet.MessageBuilder;
 import org.jxmpp.jid.EntityBareJid;
 import org.jxmpp.jid.impl.JidCreate;
 
-public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchConnectionListener {
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.List;
+
+public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchConnectionListener, IChetchIncomingMessageListener, IChetchOutgoingMessageListener {
 
     public static final String CHETCH_XMPP_SERVICE = "Chetch XMPP";
     public static final String CHETCH_XMPP_DOMAIN = "openfire.bb.lan";
 
     String username = null;
     String password = null;
+    String serviceName = null;
     Service chetchXMPPService = null;
     ServiceToken serviceToken = null;
+    Chat chat = null; //the chat between this client and the service named by serviceName
     ChetchXMPPConnection xmppConnection = null;
     Observer xmppConnectionObserver = null;
+
+    Calendar lastMessageReceived = null;
+    long pingInterval = 30000; //ping interval in ms
 
     public void init(Context context){
         try {
@@ -43,9 +53,10 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         }
     }
 
-    public void init(Context context, String username, String password){
+    public void init(Context context, String username, String password, String serviceName){
         init(context);
         setCredentials(username, password);
+        this.serviceName = serviceName;
     }
 
     public ChetchXMPPConnection getConnection(){
@@ -81,14 +92,27 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
     @Override
     protected boolean configureServices(Services services) {
         boolean configured = super.configureServices(services);
-        if(configured && services.hasService(CHETCH_XMPP_SERVICE)){
-            chetchXMPPService = services.getService(CHETCH_XMPP_SERVICE);
+        if(configured && services.hasService(serviceName)){
+            chetchXMPPService = services.getService(serviceName);
         }
         return configured;
     }
 
     public boolean isReady() {
-        return super.isReady() && xmppConnection.isReadyForChat();
+        return super.isReady() && isServiceResponding();
+    }
+
+    public boolean isServiceResponding(){
+        if(xmppConnection == null || !xmppConnection.isReadyForChat()){
+            return false;
+        }
+
+        boolean responding = false;
+        if(lastMessageReceived != null){
+            long ms = Calendar.getInstance().getTimeInMillis() - lastMessageReceived.getTimeInMillis();
+            responding = ms < 2*pingInterval;
+        }
+        return responding;
     }
 
     /*
@@ -141,10 +165,74 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         setError(e);
     }
 
+    //fial stage of a successful logon process
     @Override
     public void authenticated(XMPPConnection arg0, boolean arg1) {
-
         if(SLog.LOG)SLog.i("ChetchXMPPViewModel", "Authenticated!");
+
+        //we now check if the service (client) is online
+        String chatPartner =chetchXMPPService.getEndpoint();
+        try {
+            chat = xmppConnection.createChat(chatPartner, this, this);
+            sendPing();
+        } catch(Exception e){
+            setError(e);
+        }
+
     }
 
+    public void sendMessage(Message message) throws Exception{
+        xmppConnection.sendMessage(chat, message);
+    }
+
+    public void sendPing() throws Exception{
+        Message ping = new Message();
+        ping.Type = MessageType.PING;
+        ping.Tag = "MS:" + Calendar.getInstance().getTimeInMillis();
+        sendMessage(ping);
+    }
+
+    public void sendCommand(String command, List<Object> args) throws Exception{
+        if(command == null || command.trim().isEmpty()){
+            throw new ChetchXMPPException("ChetchXMPPViewModel::sendCommand command cannot be null or empty");
+        }
+
+        Message cmd = new Message();
+        cmd.Type = MessageType.COMMAND;
+        cmd.addValue("Command", command.toLowerCase().trim());
+
+        List<Object> arguments = new ArrayList<>();
+        cmd.addValue("Arguments", arguments);
+        sendMessage(cmd);
+    }
+
+    public void sendCommand(String commandAndArgs) throws Exception{
+        if(commandAndArgs == null || commandAndArgs.trim().isEmpty()){
+            throw new ChetchXMPPException("ChetchXMPPViewModel::sendCommand command and args cannot be null or empty");
+        }
+
+        List<Object> args = new ArrayList();
+        String sanitised = commandAndArgs.toLowerCase().trim();
+        String[] split = sanitised.split(" ");
+        String cmd = split[0];
+        for(int i = 1; i < split.length; i++){
+            args.add(split[i]);
+        }
+
+        sendCommand(cmd, args);
+    }
+
+    @Override
+    public void onIncomingMessage(EntityBareJid from, Message message, org.jivesoftware.smack.packet.Message originalMessage, Chat chat) {
+        lastMessageReceived = Calendar.getInstance();
+    }
+
+    @Override
+    public void onOutgoingMessage(EntityBareJid from, MessageBuilder builder, Chat chat) {
+
+    }
+
+    public void addMessageListener(IChetchIncomingMessageListener listener){
+        xmppConnection.addMessageListener(listener);
+    }
 }

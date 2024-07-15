@@ -24,6 +24,7 @@ import androidx.lifecycle.ViewModelProvider;
 
 import org.jivesoftware.smack.XMPPConnection;
 import org.jivesoftware.smack.chat2.Chat;
+import org.jxmpp.jid.EntityBareJid;
 
 //import org.jivesoftware.smack.ConnectionListener;
 
@@ -110,7 +111,7 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
 
             try {
                 Logger.info("Main activity sstting xmpp credentials, adding models and requesting connect ...");
-                model.init(getApplicationContext(),"test", "test");
+                model.init(getApplicationContext(),"test", "test", "Test XMPP");
                 connectManager.addModel(model);
                 connectManager.setPermissableServerTimeDifference(5 * 60);
                 connectManager.requestConnect(connectProgress);
@@ -131,26 +132,6 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
     private void startChat(){
         try {
             TextView messages = findViewById(R.id.messages);
-            ChetchXMPPConnection cnn = model.getConnection();
-            String chatPartner = "test2";
-            Chat chat = cnn.createChat(chatPartner, (from, message, originalMessage, chat1) -> {
-
-                if(message.hasValue("Count")){
-                    Integer n = message.getInt("Count");
-                    n = n + 1; //increment
-                    message.Target = from.toString();
-                    message.setValue("Count", n);
-                    messages.setText("Received; " + originalMessage.getBody() + "\nSending: " + message.toString());
-                    try {
-                        //cnn.sendMessage(chat1, message);
-                    } catch(Exception e){
-                        e.printStackTrace();
-                    }
-                }
-
-                Log.d("chat", "Received a message dong: " + originalMessage.getBody());
-            });
-
             View chatWindow = findViewById(R.id.chat);
             chatWindow.setVisibility(View.VISIBLE);
             Button sendBtn = findViewById(R.id.sendButton);
@@ -161,10 +142,9 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
                     if(!messageBody.isEmpty()) {
                         Message message = new Message();
                         message.Type = MessageType.INFO;
-                        message.Target = chat.getXmppAddressOfChatPartner().toString();
                         message.addValue("Comment", messageBody);
                         message.addValue("Count", 24);
-                        cnn.sendMessage(chat, message);
+                        model.sendMessage(message);
                         compose.setText("");
                         String messagesSoFar = messages.getText().toString();
                         messages.setText(messagesSoFar + "\n---> " + messageBody);
@@ -172,6 +152,39 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
                 } catch (Exception e){
                     e.printStackTrace();
                 }
+            });
+
+            Button pingBtn = findViewById(R.id.sendPingButton);
+            pingBtn.setOnClickListener(view -> {
+                try{
+                    model.sendPing();
+                } catch(Exception e){
+                    e.printStackTrace();
+                }
+            });
+
+            Button commandBtn = findViewById(R.id.sendCommandButton);
+            commandBtn.setOnClickListener(view -> {
+                try{
+                    String commandAndArgs = compose.getText().toString().trim();
+                    model.sendCommand(commandAndArgs.toLowerCase());
+                } catch(Exception e){
+                    e.printStackTrace();
+                }
+            });
+
+            Button errorBtn = findViewById(R.id.sendErrorTestButton);
+            errorBtn.setOnClickListener(view -> {
+                try{
+
+                } catch(Exception e){
+                    e.printStackTrace();
+                }
+            });
+
+            //finally add a message listener
+            model.addMessageListener((from, message, originalMessage, chat)->{
+                messages.setText(message.toString());
             });
 
         } catch(Exception e){

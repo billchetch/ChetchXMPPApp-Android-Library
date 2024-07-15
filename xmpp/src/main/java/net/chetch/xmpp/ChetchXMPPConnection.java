@@ -1,5 +1,6 @@
 package net.chetch.xmpp;
 
+import net.chetch.messaging.MessageType;
 import net.chetch.xmpp.exceptions.ChetchXMPPException;
 
 import android.content.Context;
@@ -310,7 +311,7 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
     private String sanitizeEntityID(String entityID){
         DomainBareJid domain = connection.getXMPPServiceDomain();
         if(!entityID.contains("@" + domain)){
-            entityID += "@" + domain;
+            entityID += "@" + domain.getDomain();
         }
         return entityID;
     }
@@ -336,15 +337,14 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
         ChatData chatData = new ChatData(chat);
         chats.put(jid, chatData);
 
+        //general xmpp listeners (required to then call listeners for chetch messages)
         chatManager.addIncomingListener(this);
         chatManager.addOutgoingListener(this);
 
-        if(incomingListener != null && !incomingMessageListeners.contains(incomingListener)){
-            incomingMessageListeners.add(incomingListener);
-        }
-        if(outgoingListener != null && !outgoingMessageListeners.contains(outgoingListener)){
-            outgoingMessageListeners.add(outgoingListener);
-        }
+        //chetch message listeners
+        addMessageListener(incomingListener);
+        addMessageListener(outgoingListener);
+
         return chat;
     }
 
@@ -359,6 +359,18 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
     public boolean isChetchMessage(org.jivesoftware.smack.packet.Message message){
         return message.getType() == org.jivesoftware.smack.packet.Message.Type.normal && CHETCH_MESSAGE_SUBJECT.equals(message.getSubject());
         //return false;
+    }
+
+    public void addMessageListener(IChetchIncomingMessageListener listener){
+        if(listener != null && !incomingMessageListeners.contains(listener)){
+            incomingMessageListeners.add(listener);
+        }
+    }
+
+    public void addMessageListener(IChetchOutgoingMessageListener listener){
+        if(listener != null && !outgoingMessageListeners.contains(listener)){
+            outgoingMessageListeners.add(listener);
+        }
     }
 
     @Override
