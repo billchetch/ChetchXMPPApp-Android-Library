@@ -3,6 +3,7 @@ package net.chetch.xmpp;
 import android.content.Context;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
 import androidx.lifecycle.Observer;
 
 import net.chetch.messaging.Message;
@@ -21,6 +22,7 @@ import org.jivesoftware.smack.chat2.Chat;
 import org.jivesoftware.smack.chat2.IncomingChatMessageListener;
 import org.jivesoftware.smack.chat2.OutgoingChatMessageListener;
 import org.jivesoftware.smack.packet.MessageBuilder;
+import org.jivesoftware.smack.roster.Roster;
 import org.jxmpp.jid.EntityBareJid;
 import org.jxmpp.jid.impl.JidCreate;
 
@@ -33,6 +35,13 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
     public static final String CHETCH_XMPP_SERVICE = "Chetch XMPP";
     public static final String CHETCH_XMPP_DOMAIN = "openfire.bb.lan";
 
+    enum ServiceEvent{
+        None,  //for initialising
+        Connected,
+        Disconnecting,
+        Stopping,
+    }
+
     String username = null;
     String password = null;
     String serviceName = null;
@@ -42,7 +51,8 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
     ChetchXMPPConnection xmppConnection = null;
     Observer xmppConnectionObserver = null;
 
-    Calendar lastMessageReceived = null;
+    Calendar lastMessageReceivedOn = null;
+    Message lastMessageReceived;
     long pingInterval = 30000; //ping interval in ms
 
     public void init(Context context){
@@ -69,9 +79,15 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
     }
 
     public DataStore loadData(Observer observer) throws Exception {
+        //in the case of being called after we've already loaded
+        if(isReadyForChat()){
+            if(SLog.LOG)SLog.w("ChetchXMPPViewModel", "XMPP connection already established");
+        }
+
         if(xmppConnection == null){
             throw new Exception("Service must have connection object");
         }
+
         //check we have a client
         if(username == null){
             throw new Exception("Service must have a username");
@@ -108,19 +124,23 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         }
 
         boolean responding = false;
-        if(lastMessageReceived != null){
-            long ms = Calendar.getInstance().getTimeInMillis() - lastMessageReceived.getTimeInMillis();
+        if(lastMessageReceivedOn != null){
+            long ms = Calendar.getInstance().getTimeInMillis() - lastMessageReceivedOn.getTimeInMillis();
             responding = ms < 2*pingInterval;
         }
         return responding;
     }
 
+    public boolean isReadyForChat(){
+        return xmppConnection != null && xmppConnection.isReadyForChat();
+    }
     /*
     XMPP connection
      */
     private void connectToXMPPServer(Observer connectionObserver){
         xmppConnectionObserver = connectionObserver;
         try{
+            xmppConnection.reset();
             xmppConnection.connect(chetchXMPPService.getLanIP(), CHETCH_XMPP_DOMAIN, this);
         } catch (Exception e){
             if(SLog.LOG)SLog.e("ChetchXMPPViewModel", e.getMessage());
@@ -171,10 +191,11 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         if(SLog.LOG)SLog.i("ChetchXMPPViewModel", "Authenticated!");
 
         //we now check if the service (client) is online
-        String chatPartner =chetchXMPPService.getEndpoint();
+        String chatPartner = chetchXMPPService.getEndpoint();
         try {
             chat = xmppConnection.createChat(chatPartner, this, this);
-            sendPing();
+            //add this person to the roster
+            subscribe(); //subscribes to the service (providing it's on of course)
         } catch(Exception e){
             setError(e);
         }
@@ -182,13 +203,21 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
     }
 
     public void sendMessage(Message message) throws Exception{
+        if(message.Tag == null || message.Tag.isEmpty()){
+            message.Tag = "MS:" + Calendar.getInstance().getTimeInMillis();
+        }
         xmppConnection.sendMessage(chat, message);
+    }
+
+    public void subscribe() throws Exception {
+        Message subscribe = new Message();
+        subscribe.Type = MessageType.SUBSCRIBE;
+        sendMessage(subscribe);
     }
 
     public void sendPing() throws Exception{
         Message ping = new Message();
         ping.Type = MessageType.PING;
-        ping.Tag = "MS:" + Calendar.getInstance().getTimeInMillis();
         sendMessage(ping);
     }
 
@@ -223,8 +252,29 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
     }
 
     @Override
-    public void onIncomingMessage(EntityBareJid from, Message message, org.jivesoftware.smack.packet.Message originalMessage, Chat chat) {
-        lastMessageReceived = Calendar.getInstance();
+    public void onIncomingMessage(EntityBareJid from, @NonNull Message message, org.jivesoftware.smack.packet.Message originalMessage, Chat chat) {
+        lastMessageReceivedOn = Calendar.getInstance();
+        lastMessageReceived = message;
+        switch(message.Type){
+            case NOTIFICATION:
+                try {
+                    ServiceEvent serviceEvent = ServiceEvent.values()[message.SubType];
+                    switch (serviceEvent) {
+                        case Stopping:
+                        case Disconnecting:
+                            lastMessageReceivedOn = null;
+                            throw new ChetchXMPPException("Service " + serviceName + " is not available");
+
+                        case Connected:
+                            break;
+                    }
+                } catch(ChetchXMPPException ex){
+                    setError(ex);
+                } catch (Exception e){
+                    //not sure about this
+                }
+                break;
+        }
     }
 
     @Override

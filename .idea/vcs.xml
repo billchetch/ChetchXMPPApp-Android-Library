@@ -3,6 +3,7 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$/../AppFrameworkLib" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/../AppResourcesLib" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../ChetchMessagingTest" vcs="Git" />
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/../Utils" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/../WebservicesTest" vcs="Git" />

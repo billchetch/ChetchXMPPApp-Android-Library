@@ -13,6 +13,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.jivesoftware.smack.ConnectionConfiguration;
+import org.jivesoftware.smack.PresenceListener;
 import org.jivesoftware.smack.ReconnectionListener;
 import org.jivesoftware.smack.chat2.Chat;
 import org.jivesoftware.smack.chat2.ChatManager;
@@ -20,6 +21,10 @@ import org.jivesoftware.smack.chat2.IncomingChatMessageListener;
 import org.jivesoftware.smack.chat2.OutgoingChatMessageListener;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.MessageBuilder;
+import org.jivesoftware.smack.packet.Presence;
+import org.jivesoftware.smack.roster.PresenceEventListener;
+import org.jivesoftware.smack.roster.Roster;
+import org.jivesoftware.smack.roster.RosterListener;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jivesoftware.smack.android.AndroidSmackInitializer;
@@ -28,7 +33,6 @@ import org.jivesoftware.smack.ConnectionListener;
 import org.jivesoftware.smack.ReconnectionManager;
 import org.jivesoftware.smack.SmackException;
 import org.jivesoftware.smack.XMPPConnection;
-import org.jivesoftware.smack.XMPPException;
 import org.jxmpp.jid.BareJid;
 import org.jxmpp.jid.DomainBareJid;
 import org.jxmpp.jid.DomainFullJid;
@@ -55,7 +59,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class ChetchXMPPConnection implements IChetchConnectionListener, ReconnectionListener, IncomingChatMessageListener, OutgoingChatMessageListener {
+public class ChetchXMPPConnection implements IChetchConnectionListener, ReconnectionListener, IncomingChatMessageListener, OutgoingChatMessageListener{
     public static final String CHETCH_MESSAGE_SUBJECT = "chetch.message";
 
     static private boolean initialised = false;
@@ -101,7 +105,7 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
 
     }
 
-    private void reset() throws Exception{
+    public void reset() throws Exception{
         if (connecting) {
             throw new ChetchXMPPException("ChetchXMPPConnection::disconnect: Connection in progress");
         }
@@ -175,6 +179,7 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
                 if(reconnectionListener != null){
                     reconnectionManager.addReconnectionListener(reconnectionListener);
                 }
+
                 /*PingManager pingManager =
                 PingManager.getInstanceFor(connection);
                 pingManager.setPingInterval(300);*/
@@ -189,9 +194,6 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
             } finally {
                 connecting = false;
             }
-
-            //store a chatmanager for this connection
-
         }); //end executor.execute
     }
 
@@ -252,7 +254,6 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
     public void connected(final XMPPConnection connection) {
         connecting = false;
         Log.d("xmpp", "Connected!");
-
     }
 
     @Override
@@ -293,7 +294,7 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
     @Override
     public void reconnectingIn(int arg0) {
 
-        Log.d("xmpp", "Reconnectingin " + arg0);
+        Log.d("xmpp", "Reconnecting " + arg0);
     }
 
     @Override
@@ -401,7 +402,7 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
         }
     }
 
-    public Message sendMessage(Chat chat, net.chetch.messaging.Message chetchMessage) throws Exception{
+    public Message sendMessage(Chat chat, @NonNull net.chetch.messaging.Message chetchMessage) throws Exception{
         //Add this c
         if(chetchMessage.Sender == null || chetchMessage.Sender.trim().isEmpty()){
             chetchMessage.Sender = connection.getUser().toString();

@@ -158,6 +158,7 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
             pingBtn.setOnClickListener(view -> {
                 try{
                     model.sendPing();
+                    compose.setText("");
                 } catch(Exception e){
                     e.printStackTrace();
                 }
@@ -168,6 +169,7 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
                 try{
                     String commandAndArgs = compose.getText().toString().trim();
                     model.sendCommand(commandAndArgs.toLowerCase());
+                    compose.setText("");
                 } catch(Exception e){
                     e.printStackTrace();
                 }
@@ -176,7 +178,7 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
             Button errorBtn = findViewById(R.id.sendErrorTestButton);
             errorBtn.setOnClickListener(view -> {
                 try{
-
+                    //compose.setText("");
                 } catch(Exception e){
                     e.printStackTrace();
                 }
