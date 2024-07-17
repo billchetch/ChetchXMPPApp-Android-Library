@@ -111,7 +111,10 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
 
             try {
                 Logger.info("Main activity sstting xmpp credentials, adding models and requesting connect ...");
-                model.init(getApplicationContext(),"test", "test", "Test XMPP");
+                model.init(getApplicationContext(),
+                        "test",
+                        "test",
+                        "GPS XMPP Service");
                 connectManager.addModel(model);
                 connectManager.setPermissableServerTimeDifference(5 * 60);
                 connectManager.requestConnect(connectProgress);
@@ -186,6 +189,7 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
 
             //finally add a message listener
             model.addMessageListener((from, message, originalMessage, chat)->{
+                message.getBody().toString();
                 messages.setText(message.toString());
             });
 

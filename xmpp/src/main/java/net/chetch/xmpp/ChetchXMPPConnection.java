@@ -33,6 +33,8 @@ import org.jivesoftware.smack.ConnectionListener;
 import org.jivesoftware.smack.ReconnectionManager;
 import org.jivesoftware.smack.SmackException;
 import org.jivesoftware.smack.XMPPConnection;
+import org.jivesoftware.smackx.ping.PingFailedListener;
+import org.jivesoftware.smackx.ping.PingManager;
 import org.jxmpp.jid.BareJid;
 import org.jxmpp.jid.DomainBareJid;
 import org.jxmpp.jid.DomainFullJid;
@@ -59,7 +61,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class ChetchXMPPConnection implements IChetchConnectionListener, ReconnectionListener, IncomingChatMessageListener, OutgoingChatMessageListener{
+public class ChetchXMPPConnection implements IChetchConnectionListener, ReconnectionListener, IncomingChatMessageListener, OutgoingChatMessageListener, PingFailedListener {
     public static final String CHETCH_MESSAGE_SUBJECT = "chetch.message";
 
     static private boolean initialised = false;
@@ -123,6 +125,8 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
         outgoingMessageListeners.clear();
     }
 
+    public boolean isConnecting(){ return connecting; }
+
     public void disconnect() throws Exception{
         if(connecting) {
             throw new ChetchXMPPException("ChetchXMPPConnection::disconnect: Connection in progress");
@@ -180,9 +184,10 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
                     reconnectionManager.addReconnectionListener(reconnectionListener);
                 }
 
-                /*PingManager pingManager =
-                PingManager.getInstanceFor(connection);
-                pingManager.setPingInterval(300);*/
+                //server pings
+                PingManager pingManager = PingManager.getInstanceFor(connection);
+                pingManager.registerPingFailedListener(this);
+                pingManager.setPingInterval(30);
 
                 chatManager = ChatManager.getInstanceFor(connection);
             } catch(Exception e){
@@ -300,6 +305,11 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
     @Override
     public void reconnectionFailed(Exception arg0) {
         Log.e("xmpp", "ReconnectionFailed!");
+    }
+
+    @Override
+    public void pingFailed() {
+        Log.e("xmpp", "Ping failed cuz!");
     }
 
     /*

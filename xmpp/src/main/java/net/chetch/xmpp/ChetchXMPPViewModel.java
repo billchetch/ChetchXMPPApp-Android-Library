@@ -1,6 +1,7 @@
 package net.chetch.xmpp;
 
 import android.content.Context;
+import android.os.Handler;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -52,11 +53,29 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
     Observer xmppConnectionObserver = null;
 
     Calendar lastMessageReceivedOn = null;
-    Message lastMessageReceived;
-    long pingInterval = 30000; //ping interval in ms
+    Calendar lastMessageSentOn = null;
+    long pingInterval = 10000; //ping interval in ms
 
+    //timer stuff
+    long timerDelay = 2000; //IN MILLIS!
+    Calendar timerStartedOn = null;
+    Handler timerHandler = new Handler();
+    Runnable timerRunnable = new Runnable() {
+        @Override
+        public void run() {
+            long nextTimer = onTimer();
+            if(nextTimer > 0) {
+                timerHandler.postDelayed(this, timerDelay);
+            }
+        }
+    };
+
+    //region Initiailsing
     public void init(Context context){
         try {
+            if(pingInterval < timerDelay + 2000){
+                throw new ChetchXMPPException("Ping interval must be greater than timer interval plus latency");
+            }
             xmppConnection = ChetchXMPPConnection.create(context);
         } catch (Exception e){
             e.printStackTrace();
@@ -69,15 +88,65 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         this.serviceName = serviceName;
     }
 
-    public ChetchXMPPConnection getConnection(){
-        return xmppConnection;
-    }
-
     public void setCredentials(String username, String password){
         this.username = username;
         this.password = password;
     }
+    //endregion
 
+    //region Timer methods
+    protected void startTimer(long timerDelay, long postDelay){
+        if(timerStartedOn != null)return;
+        this.timerDelay = timerDelay;
+
+        timerHandler.postDelayed(timerRunnable, postDelay);
+        timerStartedOn = Calendar.getInstance();
+    }
+
+    protected void startTimer(long timerDelay){
+        startTimer(timerDelay, timerDelay);
+    }
+
+    protected void startTimer(){
+        startTimer(timerDelay);
+    }
+
+    protected void stopTimer(){
+        timerHandler.removeCallbacks(timerRunnable);
+        timerStartedOn = null;
+    }
+
+    protected long onTimer(){
+        long nextTimerOn = timerDelay;
+
+        //timer based monitoring of server
+        if(xmppConnection != null && !xmppConnection.isConnecting() && !isServiceResponding()){
+            setError(new ChetchXMPPException("ChetchXMPPViewModel::onTimer the service " + serviceName + " is not responding"));
+            Log.e("ChetchXMPPViewModel", "ChetchXMPPViewModel::onTimer the service " + serviceName + " is not responding");
+        }
+        //determine if ping reuqired and if so then send
+        if(lastMessageSentOn != null){
+            long nowInMs = Calendar.getInstance().getTimeInMillis();
+            long useTime = (lastMessageReceivedOn == null ? lastMessageSentOn : lastMessageReceivedOn).getTimeInMillis();
+            if(nowInMs - useTime > pingInterval){
+                try {
+                    sendPing();
+                    Log.d("ChetchXMPPViewModel", "Sending ping");
+                } catch (Exception e){
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        //in case we wrongly set the nextTimerOn value
+        if(nextTimerOn > pingInterval){
+            nextTimerOn = timerDelay;
+        }
+        return nextTimerOn;
+    }
+    //endregion
+
+    //region Webservice Viewmodel functionality
     public DataStore loadData(Observer observer) throws Exception {
         //in the case of being called after we've already loaded
         if(isReadyForChat()){
@@ -125,8 +194,9 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
 
         boolean responding = false;
         if(lastMessageReceivedOn != null){
-            long ms = Calendar.getInstance().getTimeInMillis() - lastMessageReceivedOn.getTimeInMillis();
-            responding = ms < 2*pingInterval;
+            long lms = lastMessageReceivedOn.getTimeInMillis();
+            long ms = Calendar.getInstance().getTimeInMillis() - lms;
+            responding = ms <= pingInterval + 2000; //add some time for latency
         }
         return responding;
     }
@@ -134,6 +204,9 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
     public boolean isReadyForChat(){
         return xmppConnection != null && xmppConnection.isReadyForChat();
     }
+    //endregion
+
+    //region XMPP connection stuff
     /*
     XMPP connection
      */
@@ -147,6 +220,10 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
             e.printStackTrace();
             setError(e);
         }
+    }
+
+    public ChetchXMPPConnection getConnection(){
+        return xmppConnection;
     }
 
     @Override
@@ -196,12 +273,15 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
             chat = xmppConnection.createChat(chatPartner, this, this);
             //add this person to the roster
             subscribe(); //subscribes to the service (providing it's on of course)
+            startTimer(timerDelay);
         } catch(Exception e){
             setError(e);
         }
 
     }
+    //endregion
 
+    //region Sending messages
     public void sendMessage(Message message) throws Exception{
         if(message.Tag == null || message.Tag.isEmpty()){
             message.Tag = "MS:" + Calendar.getInstance().getTimeInMillis();
@@ -213,6 +293,7 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         Message subscribe = new Message();
         subscribe.Type = MessageType.SUBSCRIBE;
         sendMessage(subscribe);
+        Log.d("ChetchXMPPViewModel", "Subscribing to service...");
     }
 
     public void sendPing() throws Exception{
@@ -252,9 +333,15 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
     }
 
     @Override
+    public void onOutgoingMessage(EntityBareJid from, MessageBuilder builder, Chat chat) {
+        lastMessageSentOn = Calendar.getInstance();
+    }
+    //endregion
+
+    //region Recevving messages
+    @Override
     public void onIncomingMessage(EntityBareJid from, @NonNull Message message, org.jivesoftware.smack.packet.Message originalMessage, Chat chat) {
         lastMessageReceivedOn = Calendar.getInstance();
-        lastMessageReceived = message;
         switch(message.Type){
             case NOTIFICATION:
                 try {
@@ -263,6 +350,7 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
                         case Stopping:
                         case Disconnecting:
                             lastMessageReceivedOn = null;
+                            lastMessageSentOn = null;
                             throw new ChetchXMPPException("Service " + serviceName + " is not available");
 
                         case Connected:
@@ -274,15 +362,19 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
                     //not sure about this
                 }
                 break;
+
+            case SUBSCRIBE_RESPONSE:
+                Log.i("ChetchXMPPViewModel", "Subscribe response received!");
+                break;
+
+            case PING_RESPONSE:
+                Log.i("ChetchXMPPViewModel", "Ping response received!");
+                break;
         }
-    }
-
-    @Override
-    public void onOutgoingMessage(EntityBareJid from, MessageBuilder builder, Chat chat) {
-
     }
 
     public void addMessageListener(IChetchIncomingMessageListener listener){
         xmppConnection.addMessageListener(listener);
     }
+    //endregion
 }
