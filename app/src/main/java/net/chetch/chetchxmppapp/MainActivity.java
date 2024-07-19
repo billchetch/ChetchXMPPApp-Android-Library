@@ -15,6 +15,7 @@ import net.chetch.webservices.ConnectManager;
 import net.chetch.webservices.WebserviceViewModel;
 import net.chetch.xmpp.ChetchXMPPConnection;
 import net.chetch.xmpp.ChetchXMPPViewModel;
+import net.chetch.xmpp.models.GPSViewModel;
 
 import android.widget.EditText;
 import android.widget.TextView;
@@ -25,6 +26,8 @@ import androidx.lifecycle.ViewModelProvider;
 import org.jivesoftware.smack.XMPPConnection;
 import org.jivesoftware.smack.chat2.Chat;
 import org.jxmpp.jid.EntityBareJid;
+
+import java.util.Map;
 
 //import org.jivesoftware.smack.ConnectionListener;
 
@@ -100,7 +103,7 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
             //Get models
             Logger.info("Main activity setting up model callbacks ...");
 
-            model = new ViewModelProvider(this, new ViewModelProvider.AndroidViewModelFactory(getApplication())).get(ChetchXMPPViewModel.class);
+            model = new ViewModelProvider(this, new ViewModelProvider.AndroidViewModelFactory(getApplication())).get(GPSViewModel.class);
             model.getError().observe(this, throwable -> {
                 try {
                     //handleError(throwable, model);
@@ -191,6 +194,14 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
             model.addMessageListener((from, message, originalMessage, chat)->{
                 message.getBody().toString();
                 messages.setText(message.toString());
+            });
+
+            model.help.observe(this, h ->{
+                String s = "HELP:\n";
+                for(Map.Entry<String, String> entry : h.entrySet()){
+                    s += entry.getKey() + ": " + entry.getValue() + "\n";
+                }
+                messages.setText(s);
             });
 
         } catch(Exception e){

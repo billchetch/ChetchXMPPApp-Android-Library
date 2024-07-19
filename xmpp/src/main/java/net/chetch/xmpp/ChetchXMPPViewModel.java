@@ -5,10 +5,13 @@ import android.os.Handler;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
 
 import net.chetch.messaging.Message;
+import net.chetch.messaging.MessageFilter;
 import net.chetch.messaging.MessageType;
+import net.chetch.messaging.filters.CommandResponseFilter;
 import net.chetch.utilities.SLog;
 import net.chetch.webservices.DataStore;
 import net.chetch.webservices.WebserviceViewModel;
@@ -29,12 +32,17 @@ import org.jxmpp.jid.impl.JidCreate;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchConnectionListener, IChetchIncomingMessageListener, IChetchOutgoingMessageListener {
 
-    public static final String CHETCH_XMPP_SERVICE = "Chetch XMPP";
     public static final String CHETCH_XMPP_DOMAIN = "openfire.bb.lan";
+
+    public static final String COMMAND_HELP = "help";
+    public static final String COMMAND_ABOUT = "about";
+    public static final String COMMAND_VERSION = "version";
 
     enum ServiceEvent{
         None,  //for initialising
@@ -43,15 +51,20 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         Stopping,
     }
 
-    String username = null;
+    //Chetch network service stuff
+    String serviceName = null; //NOTE: this is the name as written in the network table of services
+    Service chetchXMPPService = null; //The service object as per the network table
+    //ServiceToken serviceToken = null; //Used to store data per client for this service e.g. a token
+
+    //XMPP related stuff
+    String username = null; //login in to xmpp service with this and password
     String password = null;
-    String serviceName = null;
-    Service chetchXMPPService = null;
-    ServiceToken serviceToken = null;
+    EntityBareJid xmppServiceJid = null; //This is extracted from the service object
     Chat chat = null; //the chat between this client and the service named by serviceName
     ChetchXMPPConnection xmppConnection = null;
     Observer xmppConnectionObserver = null;
 
+    //messaging stuff
     Calendar lastMessageReceivedOn = null;
     Calendar lastMessageSentOn = null;
     long pingInterval = 10000; //ping interval in ms
@@ -70,6 +83,39 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         }
     };
 
+    //Message filtering
+    List<MessageFilter> messageFilters = new ArrayList<>();
+
+    //region Message Filters
+    public MutableLiveData<Map<String,String>> help = new MutableLiveData<>();
+    MessageFilter helpResponse = new CommandResponseFilter(null, COMMAND_HELP) {
+        @Override
+        protected void onMatched(Message message) {
+            Map<String, String> helpMap = new HashMap<>();
+            for(Map.Entry<String, Object> kv : message.getBody().entrySet()){
+                helpMap.put(kv.getKey(), kv.getValue().toString());
+            }
+            help.postValue(helpMap);
+        }
+    };
+
+    public MutableLiveData<Object> version = new MutableLiveData<>();
+    MessageFilter versionResponse = new CommandResponseFilter(null, COMMAND_HELP) {
+        @Override
+        protected void onMatched(Message message) {
+            version.postValue(message.getValue("Version"));
+        }
+    };
+
+    public MutableLiveData<Object> about = new MutableLiveData<>();
+    MessageFilter aboutResponse = new CommandResponseFilter(null, COMMAND_HELP) {
+        @Override
+        protected void onMatched(Message message) {
+            version.postValue(message.getValue("About"));
+        }
+    };
+    //endregion
+
     //region Initiailsing
     public void init(Context context){
         try {
@@ -77,6 +123,11 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
                 throw new ChetchXMPPException("Ping interval must be greater than timer interval plus latency");
             }
             xmppConnection = ChetchXMPPConnection.create(context);
+
+            //filters
+            addMessageFilter(helpResponse);
+            addMessageFilter(aboutResponse);
+            addMessageFilter(versionResponse);
         } catch (Exception e){
             e.printStackTrace();
         }
@@ -179,6 +230,19 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         boolean configured = super.configureServices(services);
         if(configured && services.hasService(serviceName)){
             chetchXMPPService = services.getService(serviceName);
+            try {
+                //create a bare JID from the endpoint and update message filters
+                xmppServiceJid = JidCreate.entityBareFrom(chetchXMPPService.getEndpoint());
+                for (MessageFilter mf : messageFilters) {
+                    if (xmppServiceJid != null && (mf.Sender == null || mf.Sender.isEmpty())) {
+                        mf.Sender = xmppServiceJid.toString();
+                    }
+                }
+
+            } catch (Exception e){
+                setError(e)
+;                configured = false;
+            }
         }
         return configured;
     }
@@ -214,7 +278,9 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         xmppConnectionObserver = connectionObserver;
         try{
             xmppConnection.reset();
-            xmppConnection.connect(chetchXMPPService.getLanIP(), CHETCH_XMPP_DOMAIN, this);
+
+            xmppConnection.connect(chetchXMPPService.getLanIP(), xmppServiceJid.getDomain().toString(), this);
+
         } catch (Exception e){
             if(SLog.LOG)SLog.e("ChetchXMPPViewModel", e.getMessage());
             e.printStackTrace();
@@ -342,6 +408,7 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
     @Override
     public void onIncomingMessage(EntityBareJid from, @NonNull Message message, org.jivesoftware.smack.packet.Message originalMessage, Chat chat) {
         lastMessageReceivedOn = Calendar.getInstance();
+        boolean allowFiltering = false; //set to false if message shouldn't be run against message filters
         switch(message.Type){
             case NOTIFICATION:
                 try {
@@ -370,11 +437,32 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
             case PING_RESPONSE:
                 Log.i("ChetchXMPPViewModel", "Ping response received!");
                 break;
+
+            default:
+                allowFiltering = true;
+                break;
+        }
+
+        //message filters
+        if(allowFiltering) {
+            for (MessageFilter mf : messageFilters) {
+                mf.onMessageReceived(message);
+            }
         }
     }
 
     public void addMessageListener(IChetchIncomingMessageListener listener){
         xmppConnection.addMessageListener(listener);
+    }
+
+    public void addMessageFilter(MessageFilter messageFilter){
+        if(!messageFilters.contains(messageFilter)){
+            if(xmppServiceJid != null && (messageFilter.Sender == null || messageFilter.Sender.isEmpty())){
+                messageFilter.Sender = xmppServiceJid.toString();
+            }
+
+            messageFilters.add(messageFilter);
+        }
     }
     //endregion
 }
