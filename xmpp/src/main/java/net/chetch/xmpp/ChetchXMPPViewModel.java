@@ -12,6 +12,7 @@ import net.chetch.messaging.Message;
 import net.chetch.messaging.MessageFilter;
 import net.chetch.messaging.MessageType;
 import net.chetch.messaging.filters.CommandResponseFilter;
+import net.chetch.messaging.filters.NotificationFilter;
 import net.chetch.utilities.SLog;
 import net.chetch.webservices.DataStore;
 import net.chetch.webservices.WebserviceViewModel;
@@ -35,21 +36,29 @@ import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchConnectionListener, IChetchIncomingMessageListener, IChetchOutgoingMessageListener {
-
-    public static final String CHETCH_XMPP_DOMAIN = "openfire.bb.lan";
-
-    public static final String COMMAND_HELP = "help";
-    public static final String COMMAND_ABOUT = "about";
-    public static final String COMMAND_VERSION = "version";
-
     enum ServiceEvent{
         None,  //for initialising
         Connected,
         Disconnecting,
         Stopping,
+        StatusUpdate,
     }
+
+    static public class Status{
+        int StatusCode = 0;
+        String StatusMessage = null;
+        Map<String, Object> StatusDetails;
+        long ServerTimeInMillis = 0;
+    }
+
+    public static final String COMMAND_HELP = "help";
+    public static final String COMMAND_ABOUT = "about";
+    public static final String COMMAND_VERSION = "version";
+    public static final String COMMAND_STATUS = "status";
+
 
     //Chetch network service stuff
     String serviceName = null; //NOTE: this is the name as written in the network table of services
@@ -83,35 +92,41 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         }
     };
 
+    //live data observables
+    public MutableLiveData<Map<String,String>> help = new MutableLiveData<>();
+    public MutableLiveData<Status> status = new MutableLiveData<>();
+    public MutableLiveData<Object> version = new MutableLiveData<>();
+    public MutableLiveData<Object> about = new MutableLiveData<>();
+
     //Message filtering
     List<MessageFilter> messageFilters = new ArrayList<>();
 
     //region Message Filters
-    public MutableLiveData<Map<String,String>> help = new MutableLiveData<>();
+    MessageFilter statusUpdateResponse = new CommandResponseFilter(null, COMMAND_STATUS) {
+        @Override
+        protected void onMatched(Message message) {
+            status.postValue(message.getAsClass(Status.class));
+        }
+    };
+
     MessageFilter helpResponse = new CommandResponseFilter(null, COMMAND_HELP) {
         @Override
         protected void onMatched(Message message) {
-            Map<String, String> helpMap = new HashMap<>();
-            for(Map.Entry<String, Object> kv : message.getBody().entrySet()){
-                helpMap.put(kv.getKey(), kv.getValue().toString());
-            }
-            help.postValue(helpMap);
+            help.postValue(message.getAsClass(TreeMap.class, "Help"));
         }
     };
 
-    public MutableLiveData<Object> version = new MutableLiveData<>();
-    MessageFilter versionResponse = new CommandResponseFilter(null, COMMAND_HELP) {
+    MessageFilter versionResponse = new CommandResponseFilter(null, COMMAND_VERSION) {
         @Override
         protected void onMatched(Message message) {
-            version.postValue(message.getValue("Version"));
+            version.postValue(message.getString("Version"));
         }
     };
 
-    public MutableLiveData<Object> about = new MutableLiveData<>();
-    MessageFilter aboutResponse = new CommandResponseFilter(null, COMMAND_HELP) {
+    MessageFilter aboutResponse = new CommandResponseFilter(null, COMMAND_ABOUT) {
         @Override
         protected void onMatched(Message message) {
-            version.postValue(message.getValue("About"));
+            version.postValue(message.getString("About"));
         }
     };
     //endregion
@@ -128,6 +143,7 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
             addMessageFilter(helpResponse);
             addMessageFilter(aboutResponse);
             addMessageFilter(versionResponse);
+            addMessageFilter(statusUpdateResponse);
         } catch (Exception e){
             e.printStackTrace();
         }
@@ -238,7 +254,6 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
                         mf.Sender = xmppServiceJid.toString();
                     }
                 }
-
             } catch (Exception e){
                 setError(e)
 ;                configured = false;
@@ -342,6 +357,7 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
             startTimer(timerDelay);
         } catch(Exception e){
             setError(e);
+            e.printStackTrace();
         }
 
     }
@@ -366,6 +382,12 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         Message ping = new Message();
         ping.Type = MessageType.PING;
         sendMessage(ping);
+    }
+
+    public void requestStatus() throws Exception{
+        Message statusRequest = new Message();
+        statusRequest.Type = MessageType.STATUS_REQUEST;
+        sendMessage(statusRequest);
     }
 
     public void sendCommand(String command, List<Object> args) throws Exception{
@@ -422,6 +444,10 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
 
                         case Connected:
                             break;
+
+                        case StatusUpdate:
+                            status.postValue(message.getAsClass(Status.class));
+                            break;
                     }
                 } catch(ChetchXMPPException ex){
                     setError(ex);
@@ -431,11 +457,22 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
                 break;
 
             case SUBSCRIBE_RESPONSE:
-                Log.i("ChetchXMPPViewModel", "Subscribe response received!");
+                try {
+                    requestStatus(); //immediate request status
+                    Log.i("ChetchXMPPViewModel", "Subscribe response received!");
+                } catch (Exception e){
+                    Log.e("ChetchXMPPViewModel", e.getMessage());
+                    e.printStackTrace();
+                }
                 break;
 
             case PING_RESPONSE:
                 Log.i("ChetchXMPPViewModel", "Ping response received!");
+                break;
+
+            case STATUS_RESPONSE:
+                status.postValue(message.getAsClass(Status.class));
+                Log.i("ChetchXMPPViewModel", "Status response received!");
                 break;
 
             default:
@@ -464,5 +501,20 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
             messageFilters.add(messageFilter);
         }
     }
+
+    public List<MessageFilter> getMessageFiltersForMessage(Message message){
+        List<MessageFilter> filters = new ArrayList<>();
+        for (MessageFilter mf : messageFilters) {
+            if(mf.matches(message)){
+                filters.add(mf);
+            }
+        }
+        return filters;
+    }
+
+    public boolean hasFilterForMessage(Message message){
+        return !getMessageFiltersForMessage(message).isEmpty();
+    }
+
     //endregion
 }

@@ -16,6 +16,7 @@ import net.chetch.webservices.WebserviceViewModel;
 import net.chetch.xmpp.ChetchXMPPConnection;
 import net.chetch.xmpp.ChetchXMPPViewModel;
 import net.chetch.xmpp.models.GPSViewModel;
+import net.chetch.xmpp.models.ADMViewModel;
 
 import android.widget.EditText;
 import android.widget.TextView;
@@ -90,7 +91,8 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
     };
 
 
-    ChetchXMPPViewModel model;
+    //GPSViewModel model;
+    ADMViewModel model;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -103,21 +105,16 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
             //Get models
             Logger.info("Main activity setting up model callbacks ...");
 
-            model = new ViewModelProvider(this, new ViewModelProvider.AndroidViewModelFactory(getApplication())).get(GPSViewModel.class);
+            model = new ViewModelProvider(this, new ViewModelProvider.AndroidViewModelFactory(getApplication())).get(ADMViewModel.class);
             model.getError().observe(this, throwable -> {
-                try {
-                    //handleError(throwable, model);
-                } catch (Exception e) {
-                    SLog.e("Main", e.getMessage());
-                }
+                SLog.e("Main", throwable.getMessage());
             });
 
             try {
                 Logger.info("Main activity sstting xmpp credentials, adding models and requesting connect ...");
                 model.init(getApplicationContext(),
                         "test",
-                        "test",
-                        "GPS XMPP Service");
+                        "test");
                 connectManager.addModel(model);
                 connectManager.setPermissableServerTimeDifference(5 * 60);
                 connectManager.requestConnect(connectProgress);
@@ -192,16 +189,32 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
 
             //finally add a message listener
             model.addMessageListener((from, message, originalMessage, chat)->{
-                message.getBody().toString();
-                messages.setText(message.toString());
+                if(!model.hasFilterForMessage(message)) {
+                    message.getBody().toString();
+                    messages.setText(message.toString());
+                }
             });
 
             model.help.observe(this, h ->{
-                String s = "HELP:\n";
+                String lf = System.lineSeparator();
+                String s = "HELP:" + lf + lf;
+
                 for(Map.Entry<String, String> entry : h.entrySet()){
-                    s += entry.getKey() + ": " + entry.getValue() + "\n";
+                    s += entry.getKey() + ": " + entry.getValue() + lf;
                 }
                 messages.setText(s);
+            });
+
+            model.version.observe(this, v->{
+                messages.setText("Version: " + v);
+            });
+
+            model.about.observe(this, v->{
+                messages.setText("About: " + v);
+            });
+
+            model.status.observe(this, s->{
+                messages.setText("Status..." + s.toString());
             });
 
         } catch(Exception e){

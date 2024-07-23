@@ -415,7 +415,7 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
     public Message sendMessage(Chat chat, @NonNull net.chetch.messaging.Message chetchMessage) throws Exception{
         //Add this c
         if(chetchMessage.Sender == null || chetchMessage.Sender.trim().isEmpty()){
-            chetchMessage.Sender = connection.getUser().toString();
+            chetchMessage.Sender = connection.getUser().asBareJid().toString();
         }
 
         String messageBody = chetchMessage.serialize();
