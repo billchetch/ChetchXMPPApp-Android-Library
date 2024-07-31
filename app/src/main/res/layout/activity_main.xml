@@ -74,15 +74,15 @@
         android:layout_marginTop="8dp"
         android:visibility="invisible"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/notificationbar"
+        app:layout_constraintTop_toBottomOf="@+id/notificationbar"
         app:layout_constraintVertical_bias="1.0"
         tools:layout_editor_absoluteX="-88dp"
         tools:visibility="visible">
 
         <TextView
             android:id="@+id/messages"
-            android:layout_width="0dp"
-            android:layout_height="300dp"
+            android:layout_width="791dp"
+            android:layout_height="255dp"
             android:layout_marginStart="8dp"
             android:layout_marginTop="8dp"
             android:layout_marginEnd="8dp"
@@ -92,7 +92,7 @@
             android:scrollbars="vertical"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toBottomOf="@+id/alertArea" />
 
         <EditText
             android:id="@+id/compose"
@@ -146,6 +146,20 @@
             android:text="Error"
             app:layout_constraintStart_toEndOf="@+id/sendCommandButton"
             app:layout_constraintTop_toBottomOf="@+id/compose" />
+
+        <TextView
+            android:id="@+id/alertArea"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:height="48dp"
+            android:gravity="center_horizontal"
+            android:textColor="#E60853"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

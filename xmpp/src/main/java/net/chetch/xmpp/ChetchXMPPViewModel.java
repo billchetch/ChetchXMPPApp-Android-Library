@@ -8,6 +8,8 @@ import androidx.annotation.NonNull;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
 
+import com.google.gson.annotations.SerializedName;
+
 import net.chetch.messaging.Message;
 import net.chetch.messaging.MessageFilter;
 import net.chetch.messaging.MessageType;
@@ -39,26 +41,56 @@ import java.util.Map;
 import java.util.TreeMap;
 
 public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchConnectionListener, IChetchIncomingMessageListener, IChetchOutgoingMessageListener {
+
+    //region Constants
+    public static final String COMMAND_HELP = "help";
+    public static final String COMMAND_ABOUT = "about";
+    public static final String COMMAND_VERSION = "version";
+
+    public static final String MESSAGE_FIELD_COMMAND = "Command";
+    public static final String MESSAGE_FIELD_ARGUMENTS = "Arguments";
+    public static final String MESSAGE_FIELD_SERVICE_EVENT = "ServiceEvent";
+    //endregion
+
+    //region Class defs and Enums
     enum ServiceEvent{
-        None,  //for initialising
-        Connected,
-        Disconnecting,
-        Stopping,
-        StatusUpdate,
+        @SerializedName("0")
+        None (0),  //for initialising
+
+        @SerializedName("10000")
+        Disconnected (10000),
+
+        @SerializedName("10001")
+        Connected (10001),
+
+        @SerializedName("10002")
+        Disconnecting (10002),
+
+        @SerializedName("10004")
+        Stopping (10003),
+
+        @SerializedName("10004")
+        StatusUpdate (10004);
+
+        int value;
+
+        ServiceEvent(int val){
+            value = val;
+        }
+
+        int getValue(){
+            return value;
+        }
     }
 
     static public class Status{
         int StatusCode = 0;
         String StatusMessage = null;
         Map<String, Object> StatusDetails;
-        long ServerTimeInMillis = 0;
+        Calendar ServerTime;
+        int ServerTimeOffset = 0;
     }
-
-    public static final String COMMAND_HELP = "help";
-    public static final String COMMAND_ABOUT = "about";
-    public static final String COMMAND_VERSION = "version";
-    public static final String COMMAND_STATUS = "status";
-
+    //endregion
 
     //Chetch network service stuff
     String serviceName = null; //NOTE: this is the name as written in the network table of services
@@ -102,17 +134,10 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
     List<MessageFilter> messageFilters = new ArrayList<>();
 
     //region Message Filters
-    MessageFilter statusUpdateResponse = new CommandResponseFilter(null, COMMAND_STATUS) {
-        @Override
-        protected void onMatched(Message message) {
-            status.postValue(message.getAsClass(Status.class));
-        }
-    };
-
     MessageFilter helpResponse = new CommandResponseFilter(null, COMMAND_HELP) {
         @Override
         protected void onMatched(Message message) {
-            help.postValue(message.getAsClass(TreeMap.class, "Help"));
+            help.postValue(message.getAsClass("Help", TreeMap.class));
         }
     };
 
@@ -143,7 +168,6 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
             addMessageFilter(helpResponse);
             addMessageFilter(aboutResponse);
             addMessageFilter(versionResponse);
-            addMessageFilter(statusUpdateResponse);
         } catch (Exception e){
             e.printStackTrace();
         }
@@ -274,8 +298,9 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         boolean responding = false;
         if(lastMessageReceivedOn != null){
             long lms = lastMessageReceivedOn.getTimeInMillis();
-            long ms = Calendar.getInstance().getTimeInMillis() - lms;
-            responding = ms <= pingInterval + 2000; //add some time for latency
+            Calendar now = Calendar.getInstance();
+            long ms = now.getTimeInMillis() - lms;
+            responding = ms <= (pingInterval + 2000); //add some time for latency
         }
         return responding;
     }
@@ -390,34 +415,34 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         sendMessage(statusRequest);
     }
 
-    public void sendCommand(String command, List<Object> args) throws Exception{
-        if(command == null || command.trim().isEmpty()){
+    public void sendCommand(String commandAndArgs, Object ... args) throws Exception{
+        if(commandAndArgs == null || commandAndArgs.trim().isEmpty()){
             throw new ChetchXMPPException("ChetchXMPPViewModel::sendCommand command cannot be null or empty");
         }
 
-        Message cmd = new Message();
-        cmd.Type = MessageType.COMMAND;
-        cmd.addValue("Command", command.toLowerCase().trim());
-
-        List<Object> arguments = new ArrayList<>();
-        cmd.addValue("Arguments", arguments);
-        sendMessage(cmd);
+        List<Object> argList = new ArrayList<>();
+        String[] parts = commandAndArgs.split(" ");
+        String command = parts[0].toLowerCase().trim();
+        for(int i = 1; i < parts.length; i++){
+            if(!parts[i].isEmpty()) {
+                argList.add(parts[i].toLowerCase().trim());
+            }
+        }
+        for(Object arg : args){
+            if(arg != null) {
+                argList.add(arg);
+            }
+        }
+        sendCommand(command, argList);
     }
 
-    public void sendCommand(String commandAndArgs) throws Exception{
-        if(commandAndArgs == null || commandAndArgs.trim().isEmpty()){
-            throw new ChetchXMPPException("ChetchXMPPViewModel::sendCommand command and args cannot be null or empty");
-        }
+    private void sendCommand(String command, List<Object> args) throws Exception{
+        Message cmd = new Message();
+        cmd.Type = MessageType.COMMAND;
+        cmd.addValue(MESSAGE_FIELD_COMMAND, command.toLowerCase().trim());
 
-        List<Object> args = new ArrayList();
-        String sanitised = commandAndArgs.toLowerCase().trim();
-        String[] split = sanitised.split(" ");
-        String cmd = split[0];
-        for(int i = 1; i < split.length; i++){
-            args.add(split[i]);
-        }
-
-        sendCommand(cmd, args);
+        cmd.addValue(MESSAGE_FIELD_ARGUMENTS, args);
+        sendMessage(cmd);
     }
 
     @Override
@@ -434,20 +459,24 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         switch(message.Type){
             case NOTIFICATION:
                 try {
-                    ServiceEvent serviceEvent = ServiceEvent.values()[message.SubType];
-                    switch (serviceEvent) {
-                        case Stopping:
-                        case Disconnecting:
-                            lastMessageReceivedOn = null;
-                            lastMessageSentOn = null;
-                            throw new ChetchXMPPException("Service " + serviceName + " is not available");
+                    if(message.hasValue(MESSAGE_FIELD_SERVICE_EVENT)){
+                        ServiceEvent serviceEvent = message.getAsClass(MESSAGE_FIELD_SERVICE_EVENT, ServiceEvent.class);
+                        switch (serviceEvent) {
+                            case Stopping:
+                            case Disconnecting:
+                                lastMessageReceivedOn = null;
+                                lastMessageSentOn = null;
+                                throw new ChetchXMPPException("Service " + serviceName + " is not available");
 
-                        case Connected:
-                            break;
+                            case Connected:
+                                break;
 
-                        case StatusUpdate:
-                            status.postValue(message.getAsClass(Status.class));
-                            break;
+                            case StatusUpdate:
+                                onStatusUpdate(message);
+                                break;
+                        }
+                    } else {
+                        allowFiltering = true;
                     }
                 } catch(ChetchXMPPException ex){
                     setError(ex);
@@ -471,7 +500,7 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
                 break;
 
             case STATUS_RESPONSE:
-                status.postValue(message.getAsClass(Status.class));
+                onStatusUpdate(message);
                 Log.i("ChetchXMPPViewModel", "Status response received!");
                 break;
 
@@ -486,6 +515,12 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
                 mf.onMessageReceived(message);
             }
         }
+    }
+
+    //centralised and a hook as well as status updates can be from status request resposnses as well as notifictions
+    public void onStatusUpdate(Message message) {
+        Status newStatus = message.getAsClass(Status.class);
+        status.postValue(newStatus);
     }
 
     public void addMessageListener(IChetchIncomingMessageListener listener){
@@ -516,5 +551,16 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         return !getMessageFiltersForMessage(message).isEmpty();
     }
 
+    public String getCommandFromMessage(Message message) throws Exception{
+        if(message.hasValue(MESSAGE_FIELD_COMMAND)){
+            String command = message.getString(MESSAGE_FIELD_COMMAND);
+            if(command == null || command.isEmpty()){
+                throw new Exception("ChetchXMPPViewModel::getCommandFromMessage command is empty");
+            }
+            return command.toLowerCase().trim();
+        } else {
+            throw new Exception("ChetchXMPPViewModel::getCommandFromMessage message does not have a command field");
+        }
+    }
     //endregion
 }

@@ -187,7 +187,7 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
                 //server pings
                 PingManager pingManager = PingManager.getInstanceFor(connection);
                 pingManager.registerPingFailedListener(this);
-                pingManager.setPingInterval(30);
+                //pingManager.setPingInterval(30);
 
                 chatManager = ChatManager.getInstanceFor(connection);
             } catch(Exception e){
@@ -289,6 +289,7 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
 
     @Override
     public void authenticated(XMPPConnection arg0, boolean arg1) {
+        authenticating = false;
         Log.d("xmpp", "Authenticated!");
     }
 

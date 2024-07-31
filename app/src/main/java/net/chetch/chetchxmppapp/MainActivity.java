@@ -9,6 +9,8 @@ import net.chetch.appframework.GenericActivity;
 import net.chetch.appframework.NotificationBar;
 import net.chetch.messaging.Message;
 import net.chetch.messaging.MessageType;
+import net.chetch.utilities.CalendarTypeAdapater;
+import net.chetch.utilities.EnumTypeAdapater;
 import net.chetch.utilities.Logger;
 import net.chetch.utilities.SLog;
 import net.chetch.webservices.ConnectManager;
@@ -17,6 +19,7 @@ import net.chetch.xmpp.ChetchXMPPConnection;
 import net.chetch.xmpp.ChetchXMPPViewModel;
 import net.chetch.xmpp.models.GPSViewModel;
 import net.chetch.xmpp.models.ADMViewModel;
+import net.chetch.xmpp.models.AlarmsViewModel;
 
 import android.widget.EditText;
 import android.widget.TextView;
@@ -24,11 +27,18 @@ import android.widget.TextView;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
 
-import org.jivesoftware.smack.XMPPConnection;
-import org.jivesoftware.smack.chat2.Chat;
-import org.jxmpp.jid.EntityBareJid;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.ToNumberPolicy;
+import com.google.gson.ToNumberStrategy;
+import com.google.gson.stream.JsonReader;
 
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 //import org.jivesoftware.smack.ConnectionListener;
 
@@ -90,9 +100,12 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
         }
     };
 
-
+    class Test{
+        Calendar LD;
+    }
     //GPSViewModel model;
-    ADMViewModel model;
+    //ADMViewModel model;
+    AlarmsViewModel model;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -105,7 +118,7 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
             //Get models
             Logger.info("Main activity setting up model callbacks ...");
 
-            model = new ViewModelProvider(this, new ViewModelProvider.AndroidViewModelFactory(getApplication())).get(ADMViewModel.class);
+            model = new ViewModelProvider(this, new ViewModelProvider.AndroidViewModelFactory(getApplication())).get(AlarmsViewModel.class);
             model.getError().observe(this, throwable -> {
                 SLog.e("Main", throwable.getMessage());
             });
@@ -113,8 +126,8 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
             try {
                 Logger.info("Main activity sstting xmpp credentials, adding models and requesting connect ...");
                 model.init(getApplicationContext(),
-                        "test",
-                        "test");
+                        "mactest",
+                        "mactest");
                 connectManager.addModel(model);
                 connectManager.setPermissableServerTimeDifference(5 * 60);
                 connectManager.requestConnect(connectProgress);
@@ -132,9 +145,11 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
         Log.d("Main", "Created yewwww");
     }
 
+    String lastCommandAndArgs = "";
     private void startChat(){
         try {
             TextView messages = findViewById(R.id.messages);
+            TextView alertArea = findViewById(R.id.alertArea);
             View chatWindow = findViewById(R.id.chat);
             chatWindow.setVisibility(View.VISIBLE);
             Button sendBtn = findViewById(R.id.sendButton);
@@ -170,9 +185,14 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
             Button commandBtn = findViewById(R.id.sendCommandButton);
             commandBtn.setOnClickListener(view -> {
                 try{
-                    String commandAndArgs = compose.getText().toString().trim();
-                    model.sendCommand(commandAndArgs.toLowerCase());
-                    compose.setText("");
+                    String commandAndArgs = compose.getText().toString().trim().toLowerCase();
+                    if(commandAndArgs.isEmpty() && !lastCommandAndArgs.isEmpty()){
+                        compose.setText(lastCommandAndArgs);
+                    } else {
+                        model.sendCommand(commandAndArgs);
+                        lastCommandAndArgs = commandAndArgs;
+                        compose.setText("");
+                    }
                 } catch(Exception e){
                     e.printStackTrace();
                 }
@@ -189,8 +209,7 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
 
             //finally add a message listener
             model.addMessageListener((from, message, originalMessage, chat)->{
-                if(!model.hasFilterForMessage(message)) {
-                    message.getBody().toString();
+                if(message.Type != MessageType.COMMAND_RESPONSE) {
                     messages.setText(message.toString());
                 }
             });
@@ -214,7 +233,15 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
             });
 
             model.status.observe(this, s->{
-                messages.setText("Status..." + s.toString());
+                alertArea.setText("Status..." + s.toString());
+            });
+
+            model.alertedAlarm.observe(this, alarm->{
+                //alertArea.setText(alarm.ID + " - " + alarm.State + " - " + alarm.Message);
+            });
+
+            model.test.observe(this, test ->{
+                alertArea.setText("Test " + test + " is doing it's thing");
             });
 
         } catch(Exception e){
