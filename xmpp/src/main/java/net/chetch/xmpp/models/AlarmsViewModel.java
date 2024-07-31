@@ -7,6 +7,8 @@ import androidx.lifecycle.MutableLiveData;
 
 import com.google.gson.annotations.SerializedName;
 
+import net.chetch.messaging.filters.DataFilter;
+import net.chetch.utilities.Utils;
 import net.chetch.messaging.Message;
 import net.chetch.messaging.MessageFilter;
 import net.chetch.messaging.filters.AlertFilter;
@@ -20,6 +22,7 @@ import org.jxmpp.jid.EntityBareJid;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 public class AlarmsViewModel extends ADMViewModel{
 
@@ -28,8 +31,6 @@ public class AlarmsViewModel extends ADMViewModel{
     public static final String COMMAND_LIST_ALARMS = "list-alarms";
     public static final String MESSAGE_FIELD_ALARMS_LIST = "Alarms";
     public static final String MESSAGE_FIELD_ALARM = "Alarm";
-    public static final String MESSAGE_FIELD_BUZZER_ON = "Buzzer";
-    public static final String MESSAGE_FIELD_PILOT_ON = "Pilot";
     public static final String MESSAGE_FIELD_TEST = "Test";
     public static final int REQUEST_ALARMS_LIST_INTERVAL = 30*1000;
     public static final String COMMAND_TEST_ALARM = "test-alarm";
@@ -37,8 +38,12 @@ public class AlarmsViewModel extends ADMViewModel{
     public static final String COMMAND_TEST_PILOT = "test-pilot";
     public static final String COMMAND_SILENCE = "silence";
     public static final String COMMAND_UNSILENCE = "unsilence";
+    public static final String COMMAND_ENABLE_ALARM = "enable";
+    public static final String COMMAND_DISABLE_ALARM = "disable";
     public static final int DEFAULT_TEST_DURATION = 5; //in seconds
     public static final int DEFAULT_SILENCE_DURATION = 1*60; //in seconds
+    public static final String PILOT_LIGHT_ID = "pilot";
+    public static final String BUZZER_ID = "buzzer";
     //endregion
 
     //region Class and enums
@@ -71,6 +76,29 @@ public class AlarmsViewModel extends ADMViewModel{
         boolean Testing;
 
         public Alarm(){}
+
+        public boolean isDisabled(){
+            return State == AlarmState.DISABLED;
+        }
+
+        public boolean isConnected() {
+            return State != AlarmState.DISCONNECTED;
+        }
+
+        public boolean isRaised(){
+            return isConnected() && !isDisabled() && State != AlarmState.LOWERED;
+        }
+
+        public long getLastRaisedFor(){
+            Calendar lr = LastRaised;
+            if(lr == null)return -1;
+
+            Calendar ll = LastLowered;
+            if(ll == null)ll = Calendar.getInstance();
+
+            return Utils.dateDiff(ll, lr, TimeUnit.SECONDS);
+        }
+
     }
 
     public enum Test{
@@ -90,9 +118,11 @@ public class AlarmsViewModel extends ADMViewModel{
     public MutableLiveData<Alarm> alertedAlarm = new MutableLiveData<>();
     public MutableLiveData<List<Alarm>> alarms = new MutableLiveData<>();
     public MutableLiveData<Test> test = new MutableLiveData<>();
+    public MutableLiveData<Boolean> pilotLight = new MutableLiveData<>();
+    public MutableLiveData<Boolean> buzzer = new MutableLiveData<>();
 
     //region Message filter
-    MessageFilter alarmsListResponse = new CommandResponseFilter(null, COMMAND_LIST_ALARMS) {
+    MessageFilter alarmsListResponseFilter = new CommandResponseFilter(null, COMMAND_LIST_ALARMS) {
         @Override
         protected void onMatched(Message message){
             List<Alarm> alarmsList = message.getList(MESSAGE_FIELD_ALARMS_LIST, Alarm.class);
@@ -100,21 +130,35 @@ public class AlarmsViewModel extends ADMViewModel{
         }
     };
 
-    MessageFilter alert = new AlertFilter(null) {
+    MessageFilter alertFilter = new AlertFilter(null) {
         @Override
         protected void onMatched(Message message) {
             Alarm alarm = message.getAsClass(MESSAGE_FIELD_ALARM, Alarm.class);
-            buzzerOn = message.getBoolean(MESSAGE_FIELD_BUZZER_ON);
-            pilotOn = message.getBoolean(MESSAGE_FIELD_PILOT_ON);
             alertedAlarm.postValue(alarm);
         }
     };
 
-    MessageFilter testing = new NotificationFilter(null, MESSAGE_FIELD_TEST) {
+    MessageFilter testingFilter = new NotificationFilter(null, MESSAGE_FIELD_TEST) {
         @Override
         protected void onMatched(Message message) {
             currentTest = message.getAsClass(MESSAGE_FIELD_TEST, Test.class);
             test.postValue(currentTest);
+        }
+    };
+
+    MessageFilter pilotFilter = new DataFilter(null, "ID", PILOT_LIGHT_ID){
+        @Override
+        protected void onMatched(Message message) {
+            pilotOn = message.getBoolean("SwitchPosition");
+            pilotLight.postValue(pilotOn);
+        }
+    };
+
+    MessageFilter buzzerFilter = new DataFilter(null, "ID", PILOT_LIGHT_ID){
+        @Override
+        protected void onMatched(Message message) {
+            boolean on = message.getBoolean("SwitchPosition");
+            buzzer.postValue(buzzerOn);
         }
     };
     //endregion
@@ -131,9 +175,11 @@ public class AlarmsViewModel extends ADMViewModel{
         serviceName = ALARMS_SERVICE_NAME;
         super.init(context, username, password);
 
-        addMessageFilter(alarmsListResponse);
-        addMessageFilter(alert);
-        addMessageFilter(testing);
+        addMessageFilter(alarmsListResponseFilter);
+        addMessageFilter(alertFilter);
+        addMessageFilter(testingFilter);
+        addMessageFilter(pilotFilter);
+        addMessageFilter(buzzerFilter);
     }
     //endregion
 
@@ -174,12 +220,24 @@ public class AlarmsViewModel extends ADMViewModel{
         sendCommand(COMMAND_TEST_ALARM, alarmID, duration);
     }
 
+    public void testAlarm(String alarmID) throws Exception{
+        sendCommand(COMMAND_TEST_ALARM, alarmID, DEFAULT_TEST_DURATION);
+    }
+
     public void testBuzzer(int duration) throws Exception{
         sendCommand(COMMAND_TEST_BUZZER, duration);
     }
 
+    public void testBuzzer() throws Exception{
+        testBuzzer(DEFAULT_TEST_DURATION);
+    }
+
     public void testPilot(int duration) throws Exception{
         sendCommand(COMMAND_TEST_PILOT, duration);
+    }
+
+    public void testPilot() throws Exception{
+        testPilot(DEFAULT_TEST_DURATION);
     }
 
     public void silence(int duration) throws Exception{
@@ -188,6 +246,14 @@ public class AlarmsViewModel extends ADMViewModel{
 
     public void unsilence() throws Exception{
         sendCommand(COMMAND_UNSILENCE);
+    }
+
+    public void enableAlarm(String alarmID) throws Exception{
+        sendCommand(COMMAND_ENABLE_ALARM, alarmID);
+    }
+
+    public void disableAlarm(String alarmID) throws Exception{
+        sendCommand(COMMAND_DISABLE_ALARM, alarmID);
     }
     //endregion
 }
