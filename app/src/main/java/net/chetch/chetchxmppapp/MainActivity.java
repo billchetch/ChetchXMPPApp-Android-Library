@@ -66,7 +66,7 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
             } catch (Exception e) {
                 Log.e("Main", "load progress: " + e.getMessage());
             }
-        }else if(obj instanceof ChetchXMPPConnection){
+        } else if(obj instanceof ChetchXMPPConnection){
             ChetchXMPPConnection cnn = (ChetchXMPPConnection)obj;
             runOnUiThread(() -> {
                 if(cnn.isReadyForChat()) {

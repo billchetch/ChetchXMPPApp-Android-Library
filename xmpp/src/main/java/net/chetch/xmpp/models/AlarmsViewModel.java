@@ -157,7 +157,8 @@ public class AlarmsViewModel extends ADMViewModel{
     MessageFilter buzzerFilter = new DataFilter(null, "ID", PILOT_LIGHT_ID){
         @Override
         protected void onMatched(Message message) {
-            boolean on = message.getBoolean("SwitchPosition");
+            boolean buzzerOn = message.getBoolean("SwitchPosition");
+            buzzerSilenced = message.getBoolean("Silenced");
             buzzer.postValue(buzzerOn);
         }
     };
@@ -166,6 +167,7 @@ public class AlarmsViewModel extends ADMViewModel{
     //Fields
     Calendar alarsListRequestLastSent = null;
     boolean buzzerOn = false;
+    boolean buzzerSilenced = false;
     boolean pilotOn = false;
     Test currentTest = Test.NONE;
 
@@ -213,6 +215,7 @@ public class AlarmsViewModel extends ADMViewModel{
     }
 
     public boolean isBuzzerOn(){ return buzzerOn; }
+    public boolean isBuzzerSilenced(){ return buzzerSilenced; }
     public boolean isPilotOn(){ return pilotOn; }
     public boolean isTesting(){ return currentTest != Test.NONE; }
 
