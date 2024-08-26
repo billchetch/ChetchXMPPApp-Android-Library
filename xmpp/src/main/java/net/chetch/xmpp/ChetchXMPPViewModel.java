@@ -22,6 +22,7 @@ import net.chetch.webservices.network.Service;
 import net.chetch.webservices.network.ServiceToken;
 import net.chetch.webservices.network.Services;
 import net.chetch.xmpp.exceptions.ChetchXMPPException;
+import net.chetch.xmpp.exceptions.ChetchXMPPViewModelException;
 
 import org.jivesoftware.smack.ConnectionListener;
 import org.jivesoftware.smack.XMPPConnection;
@@ -300,7 +301,10 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
             long lms = lastMessageReceivedOn.getTimeInMillis();
             Calendar now = Calendar.getInstance();
             long ms = now.getTimeInMillis() - lms;
-            responding = ms <= (pingInterval + 2000); //add some time for latency
+            responding = ms <= 1.5*pingInterval; //add some time for latency
+            if(!responding){
+                Log.e("ChetchXMPPViewModel", "who not responding");
+            }
         }
         return responding;
     }
@@ -472,7 +476,7 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
                                 break;
 
                             case StatusUpdate:
-                                onStatusUpdate(message);
+                                onStatusUpdateReceived(message);
                                 break;
                         }
                     } else {
@@ -500,8 +504,13 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
                 break;
 
             case STATUS_RESPONSE:
-                onStatusUpdate(message);
+                onStatusUpdateReceived(message);
                 Log.i("ChetchXMPPViewModel", "Status response received!");
+                break;
+
+            case ERROR:
+                onErrorReceived(message);
+                Log.e("ChetchXMPPViewModel", "Error! ");
                 break;
 
             default:
@@ -518,9 +527,14 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
     }
 
     //centralised and a hook as well as status updates can be from status request resposnses as well as notifictions
-    public void onStatusUpdate(Message message) {
+    protected void onStatusUpdateReceived(Message message) {
         Status newStatus = message.getAsClass(Status.class);
         status.postValue(newStatus);
+    }
+
+    protected void onErrorReceived(Message message){
+        ChetchXMPPViewModelException xmppException = new ChetchXMPPViewModelException(message);
+        setError(xmppException);
     }
 
     public void addMessageListener(IChetchIncomingMessageListener listener){

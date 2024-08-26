@@ -149,17 +149,21 @@ public class AlarmsViewModel extends ADMViewModel{
     MessageFilter pilotFilter = new DataFilter(null, "ID", PILOT_LIGHT_ID){
         @Override
         protected void onMatched(Message message) {
-            pilotOn = message.getBoolean("SwitchPosition");
+            pilotOn = message.getBoolean("Position");
             pilotLight.postValue(pilotOn);
         }
     };
 
-    MessageFilter buzzerFilter = new DataFilter(null, "ID", PILOT_LIGHT_ID){
+    MessageFilter buzzerFilter = new DataFilter(null, "ID", BUZZER_ID){
         @Override
         protected void onMatched(Message message) {
-            boolean buzzerOn = message.getBoolean("SwitchPosition");
-            buzzerSilenced = message.getBoolean("Silenced");
-            buzzer.postValue(buzzerOn);
+            if(message.hasValue("Silenced")) {
+                buzzerSilenced = message.getBoolean("Silenced");
+            }
+            if(message.hasValue("Position")) {
+                buzzerOn = message.getBoolean("Position");
+                buzzer.postValue(buzzerOn);
+            }
         }
     };
     //endregion
@@ -219,12 +223,16 @@ public class AlarmsViewModel extends ADMViewModel{
     public boolean isPilotOn(){ return pilotOn; }
     public boolean isTesting(){ return currentTest != Test.NONE; }
 
-    public void testAlarm(String alarmID, int duration) throws Exception{
-        sendCommand(COMMAND_TEST_ALARM, alarmID, duration);
+    public void testAlarm(String alarmID, AlarmState state, int duration) throws Exception{
+        sendCommand(COMMAND_TEST_ALARM, alarmID, state, duration);
+    }
+
+    public void testAlarm(String alarmID, AlarmState state) throws Exception{
+        testAlarm(alarmID, state, DEFAULT_TEST_DURATION);
     }
 
     public void testAlarm(String alarmID) throws Exception{
-        sendCommand(COMMAND_TEST_ALARM, alarmID, DEFAULT_TEST_DURATION);
+        testAlarm(alarmID, AlarmState.LOWERED);
     }
 
     public void testBuzzer(int duration) throws Exception{
