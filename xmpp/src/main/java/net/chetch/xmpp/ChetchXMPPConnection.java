@@ -109,11 +109,11 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
 
     public void reset() throws Exception{
         if (connecting) {
-            throw new ChetchXMPPException("ChetchXMPPConnection::disconnect: Connection in progress");
+            throw new ChetchXMPPException("ChetchXMPPConnection::reset: Connection in progress");
         }
 
         if (connection != null && connection.isConnected()) {
-           throw new Exception("ChetchXMPPConnection::disconnect: Connection in progress");
+           throw new Exception("ChetchXMPPConnection::reset: Connection already connected");
         }
         connecting = false;
         connection = null;
@@ -126,6 +126,8 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
     }
 
     public boolean isConnecting(){ return connecting; }
+
+    public boolean isConnected(){ return connection != null && connection.isConnected(); }
 
     public void disconnect() throws Exception{
         if(connecting) {
@@ -399,7 +401,9 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
             } catch (Exception e){
                 e.printStackTrace();
             }
-
+        } else {
+            //we need to look out for service unavailable messages
+            Log.i("ChetchXMPPConnection", "Non chetch message received!");
         }
     }
 

@@ -260,8 +260,8 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         if(SLog.LOG)SLog.i("ChetchXMPPViewModel", "Loading data for xmpp user " + username);
         DataStore<?> dataStore = super.loadData(observer);
         dataStore.observe(services-> {
-            connectToXMPPServer(observer);
             if(SLog.LOG)SLog.i("ChetchXMPPViewModel", "Loaded services...");
+            connectToXMPPServer(observer);
         });
         return dataStore;
     }
@@ -280,8 +280,8 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
                     }
                 }
             } catch (Exception e){
-                setError(e)
-;                configured = false;
+                setError(e);
+                configured = false;
             }
         }
         return configured;
@@ -312,6 +312,12 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
     public boolean isReadyForChat(){
         return xmppConnection != null && xmppConnection.isReadyForChat();
     }
+
+    @Override
+    protected void setError(Throwable t) {
+        super.setError(t);
+    }
+
     //endregion
 
     //region XMPP connection stuff
@@ -320,11 +326,31 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
      */
     private void connectToXMPPServer(Observer connectionObserver){
         xmppConnectionObserver = connectionObserver;
+
+        stopTimer();
+        lastMessageReceivedOn = null;
+        lastMessageSentOn = null;
+
         try{
+            if(xmppConnection != null){
+                if(xmppConnection.isReadyForChat()) {
+                    if (SLog.LOG) SLog.i("ChetchXMPPViewModel", "::connectToXMPPServer Ready for chat so subscribing and starting timer...");
+                    subscribe(); //subscribes to the service (providing it's on of course)
+                    startTimer(timerDelay);
+                    notifyObserver(connectionObserver, xmppConnection);
+                    return;
+                } else if(xmppConnection.isConnected() || xmppConnection.isConnecting()) {
+                    //we wait
+                    if (SLog.LOG) SLog.i("ChetchXMPPViewModel", "::connectToXMPPServer Waiting for connection process to complete...");
+                    notifyObserver(connectionObserver, xmppConnection);
+                    return;
+                }
+            }
+
+            if(SLog.LOG)SLog.i("ChetchXMPPViewModel", "Connecting to XMPP server..");
             xmppConnection.reset();
-
             xmppConnection.connect(chetchXMPPService.getLanIP(), xmppServiceJid.getDomain().toString(), this);
-
+            notifyObserver(connectionObserver, xmppConnection);
         } catch (Exception e){
             if(SLog.LOG)SLog.e("ChetchXMPPViewModel", e.getMessage());
             e.printStackTrace();
@@ -345,7 +371,6 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
 
     @Override
     public void connected(XMPPConnection connection) {
-
         if(xmppConnectionObserver != null){
             notifyObserver(xmppConnectionObserver, xmppConnection);
         }
