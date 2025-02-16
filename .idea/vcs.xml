@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="VcsDirectoryMappings">
-    <mapping directory="$PROJECT_DIR$/../AppFrameworkLib" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/../AppResourcesLib" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/../ChetchMessagingTest" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../AppFramework" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../AppResources" vcs="Git" />
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../MessagingLibrary" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/../Utils" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/../WebservicesTest" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../WebserviceLibrary" vcs="Git" />
   </component>
 </project>

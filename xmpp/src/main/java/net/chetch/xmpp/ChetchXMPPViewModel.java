@@ -213,8 +213,19 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
 
         //timer based monitoring of server
         if(xmppConnection != null && !xmppConnection.isConnecting() && !isServiceResponding()){
-            setError(new ChetchXMPPException("ChetchXMPPViewModel::onTimer the service " + serviceName + " is not responding"));
-            Log.e("ChetchXMPPViewModel", "ChetchXMPPViewModel::onTimer the service " + serviceName + " is not responding");
+            String errMsg = "ChetchXMPPViewModel::onTimer the service " + serviceName + " is not responding";
+            if(lastMessageReceivedOn == null){
+                long nowInMs = Calendar.getInstance().getTimeInMillis();
+                long lastSentMs = (lastMessageSentOn != null) ? lastMessageSentOn.getTimeInMillis() : 0;
+                if(lastSentMs > 0){
+                    errMsg += " ... message sent " + (nowInMs - lastSentMs) + "ms ago but no message yet received";
+                } else {
+                    errMsg += " ... no message recorded as sent??? ";
+                }
+            }
+            //setError(new ChetchXMPPException(errMsg));
+
+            Log.e("ChetchXMPPViewModel", errMsg);
         }
         //determine if ping reuqired and if so then send
         if(lastMessageSentOn != null){
@@ -397,7 +408,8 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         setError(e);
     }
 
-    //fial stage of a successful logon process
+    //final stage of a successful logon process
+    //IMPORTANT:  Do NOT send a message from within this method as it cuases things to hang
     @Override
     public void authenticated(XMPPConnection arg0, boolean arg1) {
         if(SLog.LOG)SLog.i("ChetchXMPPViewModel", "Authenticated!");
@@ -407,6 +419,7 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         try {
             chat = xmppConnection.createChat(chatPartner, this, this);
             //add this person to the roster
+            if(SLog.LOG)SLog.i("ChetchXMPPViewModel", "Authentication successful so subscribing and starting timer with delay " + timerDelay);
             subscribe(); //subscribes to the service (providing it's on of course)
             startTimer(timerDelay);
         } catch(Exception e){
@@ -515,13 +528,7 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
                 break;
 
             case SUBSCRIBE_RESPONSE:
-                try {
-                    requestStatus(); //immediate request status
-                    Log.i("ChetchXMPPViewModel", "Subscribe response received!");
-                } catch (Exception e){
-                    Log.e("ChetchXMPPViewModel", e.getMessage());
-                    e.printStackTrace();
-                }
+                onSubscribeResponseReceived(message);
                 break;
 
             case PING_RESPONSE:
@@ -548,6 +555,17 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
             for (MessageFilter mf : messageFilters) {
                 mf.onMessageReceived(message);
             }
+        }
+    }
+
+    //centtralised and hook subscription received
+    protected void onSubscribeResponseReceived(Message message) {
+        try {
+            requestStatus(); //immediate request status
+            Log.i("ChetchXMPPViewModel", "Subscribe response received!");
+        } catch (Exception e) {
+            Log.e("ChetchXMPPViewModel", e.getMessage());
+            e.printStackTrace();
         }
     }
 

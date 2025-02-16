@@ -20,6 +20,7 @@ import net.chetch.xmpp.ChetchXMPPViewModel;
 import net.chetch.xmpp.models.GPSViewModel;
 import net.chetch.xmpp.models.ADMViewModel;
 import net.chetch.xmpp.models.AlarmsViewModel;
+import net.chetch.xmpp.models.XMPPTestViewModel;
 
 import android.widget.EditText;
 import android.widget.TextView;
@@ -105,7 +106,7 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
     }
     //GPSViewModel model;
     //ADMViewModel model;
-    AlarmsViewModel model;
+    XMPPTestViewModel model;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -118,7 +119,7 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
             //Get models
             Logger.info("Main activity setting up model callbacks ...");
 
-            model = new ViewModelProvider(this, new ViewModelProvider.AndroidViewModelFactory(getApplication())).get(AlarmsViewModel.class);
+            model = new ViewModelProvider(this, new ViewModelProvider.AndroidViewModelFactory(getApplication())).get(XMPPTestViewModel.class);
             model.getError().observe(this, throwable -> {
                 SLog.e("Main", throwable.getMessage());
             });
@@ -126,8 +127,8 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
             try {
                 Logger.info("Main activity sstting xmpp credentials, adding models and requesting connect ...");
                 model.init(getApplicationContext(),
-                        "mactest",
-                        "mactest");
+                        "mactest2",
+                        "mactest2");
                 connectManager.addModel(model);
                 connectManager.setPermissableServerTimeDifference(5 * 60);
                 connectManager.requestConnect(connectProgress);
@@ -236,13 +237,13 @@ public class MainActivity extends GenericActivity implements NotificationBar.INo
                 alertArea.setText("Status..." + s.toString());
             });
 
-            model.alertedAlarm.observe(this, alarm->{
+            /*model.alertedAlarm.observe(this, alarm->{
                 //alertArea.setText(alarm.ID + " - " + alarm.State + " - " + alarm.Message);
             });
 
             model.test.observe(this, test ->{
                 alertArea.setText("Test " + test + " is doing it's thing");
-            });
+            });*/
 
         } catch(Exception e){
             e.printStackTrace();

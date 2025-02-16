@@ -14,6 +14,7 @@ import net.chetch.messaging.MessageFilter;
 import net.chetch.messaging.filters.AlertFilter;
 import net.chetch.messaging.filters.CommandResponseFilter;
 import net.chetch.messaging.filters.NotificationFilter;
+import net.chetch.xmpp.ChetchXMPPViewModel;
 
 import org.jivesoftware.smack.XMPPConnection;
 import org.jivesoftware.smack.chat2.Chat;
@@ -24,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-public class AlarmsViewModel extends ADMViewModel{
+public class AlarmsViewModel extends ChetchXMPPViewModel {
 
     //region Constants
     public static final String ALARMS_SERVICE_NAME = "Alarms XMPP Service";
@@ -176,11 +177,8 @@ public class AlarmsViewModel extends ADMViewModel{
     Test currentTest = Test.NONE;
 
     //region Initialise stuf
-    @Override
     public void init(Context context, String username, String password) {
-        serviceName = ALARMS_SERVICE_NAME;
-        super.init(context, username, password);
-
+        super.init(context, username, password,ALARMS_SERVICE_NAME);
         addMessageFilter(alarmsListResponseFilter);
         addMessageFilter(alertFilter);
         addMessageFilter(testingFilter);
@@ -192,7 +190,7 @@ public class AlarmsViewModel extends ADMViewModel{
 
     @Override
     protected long onTimer() {
-        if(alarsListRequestLastSent != null && Calendar.getInstance().getTimeInMillis() - alarsListRequestLastSent.getTimeInMillis() > REQUEST_ALARMS_LIST_INTERVAL){
+        if(isServiceResponding() && alarsListRequestLastSent != null && Calendar.getInstance().getTimeInMillis() - alarsListRequestLastSent.getTimeInMillis() > REQUEST_ALARMS_LIST_INTERVAL){
             requestAlarmsList();
         }
 
@@ -200,12 +198,11 @@ public class AlarmsViewModel extends ADMViewModel{
     }
 
     @Override
-    public void authenticated(XMPPConnection arg0, boolean arg1) {
-        super.authenticated(arg0, arg1);
+    protected void onSubscribeResponseReceived(Message message) {
+        super.onSubscribeResponseReceived(message);
 
         requestAlarmsList();
     }
-
 
     //region Sending messages and commands etc.
     public void requestAlarmsList(){
