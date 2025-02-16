@@ -147,22 +147,22 @@ public class AlarmsViewModel extends ChetchXMPPViewModel {
         }
     };
 
-    MessageFilter pilotFilter = new DataFilter(null, "ID", PILOT_LIGHT_ID){
+    MessageFilter pilotFilter = new DataFilter(PILOT_LIGHT_ID){
         @Override
         protected void onMatched(Message message) {
-            pilotOn = message.getBoolean("Position");
+            pilotOn = message.getBoolean("On");
             pilotLight.postValue(pilotOn);
         }
     };
 
-    MessageFilter buzzerFilter = new DataFilter(null, "ID", BUZZER_ID){
+    MessageFilter buzzerFilter = new DataFilter(BUZZER_ID){
         @Override
         protected void onMatched(Message message) {
             if(message.hasValue("Silenced")) {
                 buzzerSilenced = message.getBoolean("Silenced");
             }
-            if(message.hasValue("Position")) {
-                buzzerOn = message.getBoolean("Position");
+            if(message.hasValue("On")) {
+                buzzerOn = message.getBoolean("On");
                 buzzer.postValue(buzzerOn);
             }
         }
