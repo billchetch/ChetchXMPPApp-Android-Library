@@ -223,7 +223,7 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
                     errMsg += " ... no message recorded as sent??? ";
                 }
             }
-            //setError(new ChetchXMPPException(errMsg));
+            setError(new ChetchXMPPException(errMsg));
 
             Log.e("ChetchXMPPViewModel", errMsg);
         }
@@ -594,6 +594,11 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         }
     }
 
+    public void addMessageFilters(MessageFilter ... messageFilters){
+        for(MessageFilter mf : messageFilters){
+            addMessageFilter(mf);
+        }
+    }
     public List<MessageFilter> getMessageFiltersForMessage(Message message){
         List<MessageFilter> filters = new ArrayList<>();
         for (MessageFilter mf : messageFilters) {

@@ -15,4 +15,13 @@ public class ChetchXMPPViewModelException extends ChetchXMPPException{
         sourceMessage = errorMessage;
     }
 
+    public ChetchXMPPViewModelException(Message errorMessage, String errMsg)
+    {
+        super(errMsg);
+        sourceMessage = errorMessage;
+    }
+
+    public Message getSourceMessage(){
+        return sourceMessage;
+    }
 }

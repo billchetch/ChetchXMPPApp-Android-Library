@@ -15,6 +15,7 @@ import net.chetch.messaging.filters.AlertFilter;
 import net.chetch.messaging.filters.CommandResponseFilter;
 import net.chetch.messaging.filters.NotificationFilter;
 import net.chetch.xmpp.ChetchXMPPViewModel;
+import net.chetch.xmpp.exceptions.ChetchXMPPViewModelException;
 
 import org.jivesoftware.smack.XMPPConnection;
 import org.jivesoftware.smack.chat2.Chat;
@@ -33,6 +34,7 @@ public class AlarmsViewModel extends ChetchXMPPViewModel {
     public static final String MESSAGE_FIELD_ALARMS_LIST = "Alarms";
     public static final String MESSAGE_FIELD_ALARM = "Alarm";
     public static final String MESSAGE_FIELD_TEST = "Test";
+    public static final String MESSAGE_FIELDS_BOARD_READY = "Board,Ready";
     public static final int REQUEST_ALARMS_LIST_INTERVAL = 30*1000;
     public static final String COMMAND_TEST_ALARM = "test-alarm";
     public static final String COMMAND_TEST_BUZZER = "test-buzzer";
@@ -122,6 +124,8 @@ public class AlarmsViewModel extends ChetchXMPPViewModel {
     public MutableLiveData<Boolean> pilotLight = new MutableLiveData<>();
     public MutableLiveData<Boolean> buzzer = new MutableLiveData<>();
 
+    public MutableLiveData<Boolean> boardReady = new MutableLiveData<>();
+
     //region Message filter
     MessageFilter alarmsListResponseFilter = new CommandResponseFilter(null, COMMAND_LIST_ALARMS) {
         @Override
@@ -144,6 +148,14 @@ public class AlarmsViewModel extends ChetchXMPPViewModel {
         protected void onMatched(Message message) {
             currentTest = message.getAsClass(MESSAGE_FIELD_TEST, Test.class);
             test.postValue(currentTest);
+        }
+    };
+
+    MessageFilter boardReadyFilter = new NotificationFilter(null, MESSAGE_FIELDS_BOARD_READY) {
+        @Override
+        protected void onMatched(Message message) {
+            boolean isReady = message.getBoolean("Ready");
+            boardReady.postValue(isReady);
         }
     };
 
@@ -179,11 +191,12 @@ public class AlarmsViewModel extends ChetchXMPPViewModel {
     //region Initialise stuf
     public void init(Context context, String username, String password) {
         super.init(context, username, password,ALARMS_SERVICE_NAME);
-        addMessageFilter(alarmsListResponseFilter);
-        addMessageFilter(alertFilter);
-        addMessageFilter(testingFilter);
-        addMessageFilter(pilotFilter);
-        addMessageFilter(buzzerFilter);
+        addMessageFilters(alarmsListResponseFilter,
+                            alertFilter,
+                            testingFilter,
+                            boardReadyFilter,
+                            pilotFilter,
+                            buzzerFilter);
     }
     //endregion
 
