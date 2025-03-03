@@ -8,6 +8,7 @@ import androidx.lifecycle.MutableLiveData;
 import com.google.gson.annotations.SerializedName;
 
 import net.chetch.messaging.filters.DataFilter;
+import net.chetch.utilities.SLog;
 import net.chetch.utilities.Utils;
 import net.chetch.messaging.Message;
 import net.chetch.messaging.MessageFilter;
@@ -22,6 +23,7 @@ import org.jivesoftware.smack.chat2.Chat;
 import org.jxmpp.jid.EntityBareJid;
 
 import java.util.Calendar;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -131,6 +133,9 @@ public class AlarmsViewModel extends ChetchXMPPViewModel {
         @Override
         protected void onMatched(Message message){
             List<Alarm> alarmsList = message.getList(MESSAGE_FIELD_ALARMS_LIST, Alarm.class);
+            alarmsList.sort((a1, a2) -> {
+                return a1.Name.compareToIgnoreCase(a2.Name);
+            });
             alarms.postValue(alarmsList);
         }
     };
@@ -138,6 +143,7 @@ public class AlarmsViewModel extends ChetchXMPPViewModel {
     MessageFilter alertFilter = new AlertFilter(null) {
         @Override
         protected void onMatched(Message message) {
+            SLog.i("AVM", "Alert received from " + message.Sender);
             Alarm alarm = message.getAsClass(MESSAGE_FIELD_ALARM, Alarm.class);
             alertedAlarm.postValue(alarm);
         }

@@ -390,7 +390,9 @@ public class ChetchXMPPConnection implements IChetchConnectionListener, Reconnec
     @Override
     public void newIncomingMessage(EntityBareJid from, org.jivesoftware.smack.packet.Message message, Chat chat) {
         ChatData chatData = chats.get(from);
-        chatData.messagesReceived++;
+        if(chatData != null) {
+            chatData.messagesReceived++;
+        }
 
         if(isChetchMessage(message)) {
             try {
