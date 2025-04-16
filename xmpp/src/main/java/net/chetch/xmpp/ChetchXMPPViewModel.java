@@ -2,6 +2,7 @@ package net.chetch.xmpp;
 
 import android.content.Context;
 import android.os.Handler;
+import android.telephony.PhoneNumberUtils;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -16,6 +17,7 @@ import net.chetch.messaging.MessageType;
 import net.chetch.messaging.filters.CommandResponseFilter;
 import net.chetch.messaging.filters.NotificationFilter;
 import net.chetch.utilities.SLog;
+import net.chetch.utilities.Utils;
 import net.chetch.webservices.DataStore;
 import net.chetch.webservices.WebserviceViewModel;
 import net.chetch.webservices.network.Service;
@@ -85,11 +87,31 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
     }
 
     static public class Status{
+        public String ServiceName = null;
         public int StatusCode = 0;
         public String StatusMessage = null;
         public Map<String, Object> StatusDetails;
         public Calendar ServerTime;
         public int ServerTimeOffset = 0;
+
+        public String getSummary(){
+            String s = ServiceName == null ? "Unknown Service" : ServiceName;
+            s += " (" + StatusCode + ")";
+            s += " @ " + Utils.formatDate(ServerTime, "yyyy-MM-dd HH:mm:ss Z");
+            return s;
+        }
+
+        public String getDetails(String lf){
+            StringBuilder builder = new StringBuilder();
+            for(Map.Entry<String, Object> entry : StatusDetails.entrySet()){
+                builder.append(entry.getKey() + ": " + entry.getValue() + lf);
+            }
+            return builder.toString();
+        }
+
+        public String getDetails(){
+            return getDetails("\n");
+        }
     }
     //endregion
 
