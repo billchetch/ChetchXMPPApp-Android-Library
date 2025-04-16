@@ -85,11 +85,11 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
     }
 
     static public class Status{
-        int StatusCode = 0;
-        String StatusMessage = null;
-        Map<String, Object> StatusDetails;
-        Calendar ServerTime;
-        int ServerTimeOffset = 0;
+        public int StatusCode = 0;
+        public String StatusMessage = null;
+        public Map<String, Object> StatusDetails;
+        public Calendar ServerTime;
+        public int ServerTimeOffset = 0;
     }
     //endregion
 

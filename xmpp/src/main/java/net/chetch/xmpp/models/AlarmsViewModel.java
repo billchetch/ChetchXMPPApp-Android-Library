@@ -45,6 +45,8 @@ public class AlarmsViewModel extends ChetchXMPPViewModel {
     public static final String COMMAND_UNSILENCE = "unsilence";
     public static final String COMMAND_ENABLE_ALARM = "enable";
     public static final String COMMAND_DISABLE_ALARM = "disable";
+
+    public static final String COMMAND_REFRESH_ALARM = "refresh-alarm";
     public static final int DEFAULT_TEST_DURATION = 5; //in seconds
     public static final int DEFAULT_SILENCE_DURATION = 1*60; //in seconds
     public static final String PILOT_LIGHT_ID = "pilot";
@@ -281,6 +283,10 @@ public class AlarmsViewModel extends ChetchXMPPViewModel {
 
     public void disableAlarm(String alarmID) throws Exception{
         sendCommand(COMMAND_DISABLE_ALARM, alarmID);
+    }
+
+    public void refreshAlarm(String alarmID) throws Exception{
+        sendCommand(COMMAND_REFRESH_ALARM, alarmID);
     }
     //endregion
 }
