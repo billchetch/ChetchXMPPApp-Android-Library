@@ -94,6 +94,9 @@ public class ChetchXMPPViewModel extends WebserviceViewModel implements IChetchC
         public Calendar ServerTime;
         public int ServerTimeOffset = 0;
 
+        public String XMPPAccount = null;
+        public int XMPPContacts = 0;
+
         public String getSummary(){
             String s = ServiceName == null ? "Unknown Service" : ServiceName;
             s += " (" + StatusCode + ")";
